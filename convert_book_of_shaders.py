@@ -36,6 +36,9 @@ shader = re.sub(r'\bu_tex0\b', 'iChannel0', shader)
 shader = re.sub(r'\bgl_FragCoord\b', 'fragCoord', shader)
 shader = re.sub(r'\bgl_FragColor\b', 'fragColor', shader)
 
+# Replace texture2D with texture (Vulkan GLSL uses texture())
+shader = re.sub(r'\btexture2D\b', 'texture', shader)
+
 # Add Vulkan header
 vulkan_header = """#version 450
 
