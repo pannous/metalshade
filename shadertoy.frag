@@ -9,13 +9,22 @@ layout(binding = 0) uniform UniformBufferObject {
     vec4 iMouse;
 } ubo;
 
-// Simple animated gradient - perfect for testing
-void main() {
-    vec2 uv = fragCoord / ubo.iResolution.xy;
+layout(binding = 1) uniform sampler2D iChannel0;
 
-    // Animated colors
-    float time = ubo.iTime;
-    vec3 col = 0.5 + 0.5 * cos(time + uv.xyx + vec3(0, 2, 4));
+// If you intend to reuse this shader, please add credits to 'Danilo Guanabara'
 
-    fragColor = vec4(col, 1.0) + iMouse;
+void main(){
+	vec3 c;
+	float l,z=ubo.iTime;
+	for(int i=0;i<3;i++) {
+		vec2 uv,p=fragCoord.xy/ubo.iResolution.xy;
+		uv=p;
+		p-=.5;
+		p.x*=ubo.iResolution.xy.x/ubo.iResolution.xy.y;
+		z+=.07;
+		l=length(p);
+		uv+=p/l*(sin(z)+1.)*abs(sin(l*9.-z-z));
+		c[i]=.01/length(mod(uv,1.)-.5);
+	}
+	fragColor=vec4(c/l,ubo.iTime);
 }

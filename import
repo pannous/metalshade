@@ -1,0 +1,176 @@
+#!/usr/bin/env python3
+"""
+One-stop ShaderToy importer: fetch, convert, compile, and activate
+Usage: ./import <url>
+Example: ./import https://www.shadertoy.com/view/fsVBDm
+"""
+
+import sys
+import re
+import subprocess
+from pathlib import Path
+
+SHADERS_DIR = Path("shaders")
+
+
+def extract_shader_id(url_or_id):
+    """Extract shader ID from URL or return ID directly"""
+    if "/" in url_or_id or "shadertoy.com" in url_or_id:
+        match = re.search(r'/view/([a-zA-Z0-9]+)', url_or_id)
+        if match:
+            return match.group(1)
+        raise ValueError(f"Could not extract shader ID from URL: {url_or_id}")
+    return url_or_id
+
+
+def convert_shadertoy_to_vulkan(code):
+    """Convert ShaderToy GLSL to Vulkan-compatible GLSL"""
+    code = re.sub(r'// http://www\.pouet\.net.*\n', '', code)
+
+    vulkan_header = """#version 450
+
+layout(location = 0) in vec2 fragCoord;
+layout(location = 0) out vec4 fragColor;
+
+layout(binding = 0) uniform UniformBufferObject {
+    vec3 iResolution;
+    float iTime;
+    vec4 iMouse;
+} ubo;
+
+layout(binding = 1) uniform sampler2D iChannel0;
+
+"""
+
+    code = re.sub(r'#define\s+t\s+iTime', '', code)
+    code = re.sub(r'#define\s+r\s+iResolution\.xy', '', code)
+    code = re.sub(r'(?<!ubo\.)\biTime\b', 'ubo.iTime', code)
+    code = re.sub(r'(?<!ubo\.)\biResolution\b', 'ubo.iResolution', code)
+    code = re.sub(r'(?<!ubo\.)\biMouse\b', 'ubo.iMouse', code)
+    code = re.sub(r'\biTimeDelta\b', '0.016', code)
+    code = re.sub(r'\biFrame\b', 'int(ubo.iTime * 60.0)', code)
+    code = re.sub(r'\biFrameRate\b', '60.0', code)
+    code = re.sub(r'\biDate\b', 'vec4(2024.0, 1.0, 1.0, 0.0)', code)
+    code = re.sub(r'\biSampleRate\b', '44100.0', code)
+    code = re.sub(
+        r'void\s+mainImage\s*\(\s*out\s+vec4\s+\w+\s*,\s*in\s+vec2\s+\w+\s*\)',
+        'void main()',
+        code
+    )
+    code = re.sub(r'(?<![a-zA-Z_])\bt\b(?![a-zA-Z_])', 'ubo.iTime', code)
+    code = re.sub(r'(?<![a-zA-Z_])\br\b(?![a-zA-Z_])', 'ubo.iResolution.xy', code)
+    code = re.sub(r'\n\n\n+', '\n\n', code)
+
+    return vulkan_header + code.strip() + '\n'
+
+
+def compile_shader(frag_file):
+    """Compile shader to SPIR-V"""
+    result = subprocess.run(
+        ["glslangValidator", "-V", str(frag_file), "-o", "frag.spv"],
+        capture_output=True,
+        text=True
+    )
+
+    if result.returncode != 0 or "ERROR" in result.stdout:
+        print("❌ Compilation failed!")
+        print(result.stdout)
+        print(result.stderr)
+        return False
+
+    return True
+
+
+def find_raw_shader(shader_id):
+    """Find raw shader file for given ID"""
+    # Look for files containing the shader ID
+    for raw_file in SHADERS_DIR.glob("*_raw.glsl"):
+        if shader_id.lower() in raw_file.name.lower():
+            return raw_file
+
+    # Not found - don't fall back
+    return None
+
+
+def process_shader(raw_file):
+    """Convert, compile, and activate a shader"""
+    print(f"\n→ Converting {raw_file.name}...")
+
+    with open(raw_file, 'r') as f:
+        shadertoy_code = f.read()
+
+    vulkan_code = convert_shadertoy_to_vulkan(shadertoy_code)
+
+    frag_file = raw_file.parent / raw_file.name.replace('_raw.glsl', '.frag')
+    with open(frag_file, 'w') as f:
+        f.write(vulkan_code)
+
+    print(f"✓ Converted: {frag_file.name}")
+
+    print(f"\n→ Activating shader...")
+    subprocess.run(["cp", str(frag_file), "shadertoy.frag"], check=True)
+
+    print(f"→ Compiling...")
+    if compile_shader("shadertoy.frag"):
+        print("\n✓ Shader ready!")
+        print(f"✓ Compiled: frag.spv")
+        print()
+        print("Run ./run.sh to view")
+        return True
+
+    return False
+
+
+def main():
+    if len(sys.argv) < 2 or sys.argv[1] in ["-h", "--help"]:
+        print("╔══════════════════════════════════════════════════════════╗")
+        print("║    One-Stop ShaderToy Importer                          ║")
+        print("╚══════════════════════════════════════════════════════════╝")
+        print()
+        print("Usage: ./import <url>")
+        print()
+        print("Examples:")
+        print("  ./import https://www.shadertoy.com/view/fsVBDm")
+        print("  ./import https://www.shadertoy.com/view/4l2XWK")
+        print()
+        print("In Claude Code:")
+        print("  Claude will automatically fetch, convert, and activate the shader")
+        sys.exit(0)
+
+    url_or_id = sys.argv[1]
+
+    try:
+        shader_id = extract_shader_id(url_or_id)
+        url = f"https://www.shadertoy.com/view/{shader_id}"
+
+        print("╔══════════════════════════════════════════════════════════╗")
+        print("║    One-Stop ShaderToy Importer                          ║")
+        print("╚══════════════════════════════════════════════════════════╝")
+        print(f"\nShader: {shader_id}")
+        print(f"URL:    {url}")
+
+        # Check if shader is already fetched
+        raw_file = find_raw_shader(shader_id)
+
+        if not raw_file:
+            print("\n→ Shader not found locally")
+            print("   Need to fetch from ShaderToy...")
+            print(f"\n   URL: {url}")
+            print(f"   ID:  {shader_id}")
+            # Exit with special code to signal Claude to handle fetch
+            sys.exit(42)
+        else:
+            print(f"\n✓ Found: {raw_file.name}")
+            # Process the shader
+            if process_shader(raw_file):
+                sys.exit(0)
+            else:
+                sys.exit(1)
+
+    except Exception as e:
+        print(f"\nError: {e}", file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
