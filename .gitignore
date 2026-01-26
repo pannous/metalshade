@@ -1,0 +1,18 @@
+# Build artifacts
+*.spv
+shadertoy_viewer
+test_vulkan
+
+# Downloaded shaders
+shaders/
+
+# macOS
+.DS_Store
+*.dSYM
+
+# Editor files
+*.swp
+*.swo
+*~
+.vscode/
+.idea/

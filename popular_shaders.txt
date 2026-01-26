@@ -1,0 +1,56 @@
+# Popular ShaderToy Shaders for Testing
+# Format: shader_id | name | difficulty | features
+
+# BEGINNER (Simple, good for testing)
+XsXXDn | Seascape | Easy | Raymarching ocean
+MdX3Rr | Snail | Easy | Cute 3D snail
+4dX3Rn | Simple Fire | Easy | 2D fire effect
+XsGfzV | Grid Pattern | Very Easy | Basic UV grid
+4djSRW | Hash Noise | Very Easy | Procedural noise
+
+# INTERMEDIATE
+4l2XWK | Bumped Sinusoidal Warp | Medium | Bump mapping, current demo
+ldX3W8 | Raymarching Primitives | Medium | SDF shapes
+XsX3RB | Flow Field | Medium | Particle motion
+4sfGzS | Fractal Pyramid | Medium | 3D fractals
+MdlXz8 | Rain | Medium | Raindrop simulation
+
+# ADVANCED (High complexity)
+XtjSDK | Sculpture III | Hard | Advanced raymarching
+3lsSzf | Elevated | Hard | Terrain rendering
+4ttSWf | Minecraft | Hard | Voxel rendering
+XlfGRj | Protean Clouds | Hard | Volumetric clouds
+4sl3Dr | Volcanic | Hard | Lava simulation
+
+# RAYMARCHING CLASSICS
+Xds3zN | Rainforest | Hard | Nature scene
+4sXGRM | Alien Corridor | Hard | Architecture
+XslGRr | Prehistoric | Hard | Dinosaur scene
+XsX3WS | Voxel Game | Medium | Block world
+4ds3Rn | Metaballs | Easy | Blobby forms
+
+# ABSTRACT/ARTISTIC
+MslGWN | Beauty of Math | Medium | Abstract patterns
+XdX3W8 | Kaleidoscope | Easy | Symmetric patterns
+4dX3WH | Mandelbrot | Easy | Classic fractal
+ldl3W8 | Julia Set | Easy | Julia fractal
+4ttGDr | Apollonian | Medium | Circle packing
+
+# INTERACTIVE (use iMouse)
+lsf3WH | Mouse Ripple | Easy | Click ripples
+MdX3Dh | Follow Mouse | Easy | Particle follow
+4ds3Dn | Paint | Easy | Drawing effect
+XsBXWt | Glass Pane | Medium | Refraction
+
+# SHADER TOYS (Fun demos)
+XdfXRl | 2D Physics | Medium | Bouncing balls
+4dcGW2 | Audio Waves | Medium | Sound visualization
+MdX3Rs | Tunnel | Easy | Classic tunnel
+XsX3R8 | Spiral | Easy | Hypnotic spiral
+4sX3RN | Matrix Rain | Easy | Matrix effect
+
+# To download any shader:
+# ./download_shader.sh <shader_id> <output_name>
+#
+# Example:
+# ./download_shader.sh XsXXDn seascape
