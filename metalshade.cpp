@@ -33,8 +33,8 @@ std::vector<char> readFile(const std::string& filename) {
 
 class ShaderToyViewer {
 public:
-    void run() {
-        loadShaderList();
+    void run(const std::string& initialShader = "") {
+        loadShaderList(initialShader);
         initWindow();
         initVulkan();
         mainLoop();
@@ -128,7 +128,14 @@ private:
         }
     }
 
-    void loadShaderList() {
+    void loadShaderList(const std::string& initialShader = "") {
+        // If a specific shader was provided via command line, use it
+        if (!initialShader.empty()) {
+            currentShaderPath = initialShader;
+            std::cout << "✓ Loading shader: " << currentShaderPath << std::endl;
+            return;
+        }
+
         std::ifstream file("shader_list.txt");
         if (!file.is_open()) {
             std::cerr << "⚠ shader_list.txt not found, using default shader" << std::endl;
@@ -1174,10 +1181,15 @@ private:
     }
 };
 
-int main() {
+int main(int argc, char* argv[]) {
     ShaderToyViewer app;
     try {
-        app.run();
+        // Check if a shader path was provided as command-line argument
+        if (argc > 1) {
+            app.run(argv[1]);
+        } else {
+            app.run();
+        }
     } catch (const std::exception& e) {
         std::cerr << "Error: " << e.what() << std::endl;
         return EXIT_FAILURE;
