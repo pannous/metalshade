@@ -243,32 +243,42 @@ private:
         std::string baseName = getShaderBaseName(absFragPath);
         std::string shaderDir = getShaderDirectory(absFragPath);
 
-        // Work in the shader's directory instead of /tmp/
-        std::string tempFrag = shaderDir + "/" + baseName + ".glsl";
+        // Check if input is already a .glsl file
+        bool isGlslFile = (fragPath.size() >= 5 && fragPath.substr(fragPath.size() - 5) == ".glsl");
 
-        // Check if file is already in Vulkan format (has #version 450)
-        std::ifstream checkFile(absFragPath);
-        std::string firstLine;
-        bool needsConversion = true;
-        if (checkFile.is_open() && std::getline(checkFile, firstLine)) {
-            if (firstLine.find("#version 450") != std::string::npos) {
-                // Already in Vulkan format, just copy it
-                needsConversion = false;
-                std::string copyCmd = "cp \"" + absFragPath + "\" \"" + tempFrag + "\"";
-                if (system(copyCmd.c_str()) != 0) {
-                    return false;
+        std::string tempFrag;
+        if (isGlslFile) {
+            // Already a .glsl file, use it directly
+            tempFrag = absFragPath;
+            std::cout << "✓ Using GLSL shader: " << tempFrag << std::endl;
+        } else {
+            // Need to convert from .frag to .glsl
+            tempFrag = shaderDir + "/" + baseName + ".glsl";
+
+            // Check if file is already in Vulkan format (has #version 450)
+            std::ifstream checkFile(absFragPath);
+            std::string firstLine;
+            bool needsConversion = true;
+            if (checkFile.is_open() && std::getline(checkFile, firstLine)) {
+                if (firstLine.find("#version 450") != std::string::npos) {
+                    // Already in Vulkan format, just copy it
+                    needsConversion = false;
+                    std::string copyCmd = "cp \"" + absFragPath + "\" \"" + tempFrag + "\"";
+                    if (system(copyCmd.c_str()) != 0) {
+                        return false;
+                    }
                 }
             }
-        }
-        checkFile.close();
+            checkFile.close();
 
-        if (needsConversion) {
-            // Use absolute path to converter script (works regardless of working directory)
-            std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
-            int result = system(convertCmd.c_str());
-            if (result != 0) {
-                std::cerr << "✗ Shader conversion failed for: " << fragPath << std::endl;
-                return false;
+            if (needsConversion) {
+                // Use absolute path to converter script (works regardless of working directory)
+                std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
+                int result = system(convertCmd.c_str());
+                if (result != 0) {
+                    std::cerr << "✗ Shader conversion failed for: " << fragPath << std::endl;
+                    return false;
+                }
             }
         }
 
