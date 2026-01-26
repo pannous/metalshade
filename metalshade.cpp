@@ -237,12 +237,16 @@ private:
     }
 
     bool compileAndLoadShader(const std::string& fragPath) {
-        // Convert Book of Shaders format to Vulkan GLSL
-        std::string tempFrag = "/tmp/current_shader.frag";
-        std::string tempSpv = "/tmp/current_shader.spv";
-
         // Convert to absolute path (works when working directory changes)
         std::string absFragPath = getAbsolutePath(fragPath);
+
+        // Get shader base name and directory
+        std::string baseName = getShaderBaseName(absFragPath);
+        std::string shaderDir = getShaderDirectory(absFragPath);
+
+        // Work in the shader's directory instead of /tmp/
+        std::string tempFrag = shaderDir + "/" + baseName + ".converted.frag";
+        std::string tempSpv = shaderDir + "/" + baseName + ".temp.spv";
 
         // Check if file is already in Vulkan format (has #version 450)
         std::ifstream checkFile(absFragPath);
@@ -270,24 +274,16 @@ private:
             }
         }
 
-        // Compile to SPIR-V and show errors with line numbers
-        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" 2>&1";
-        int result = system(compileCmd.c_str());
-        if (result != 0) {
-            std::cerr << "✗ Shader compilation failed for: " << fragPath << std::endl;
-            std::cerr << "  Converted shader location: " << tempFrag << std::endl;
-            return false;
-        }
-
-        // Get shader base name and directory (use absolute path)
-        std::string baseName = getShaderBaseName(absFragPath);
-        std::string shaderDir = getShaderDirectory(absFragPath);
+        // Output .spv files in the same directory
         std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
         std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
 
-        // Copy fragment shader to shader-specific .spv file next to original
-        std::string copyFragCmd = "cp \"" + tempSpv + "\" \"" + outputFragSpv + "\" 2>/dev/null";
-        if (system(copyFragCmd.c_str()) != 0) {
+        // Compile to SPIR-V and show errors with line numbers
+        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + outputFragSpv + "\" 2>&1";
+        int result = system(compileCmd.c_str());
+        if (result != 0) {
+            std::cerr << "✗ Shader compilation failed for: " << fragPath << std::endl;
+            std::cerr << "  Converted shader: " << tempFrag << std::endl;
             return false;
         }
 
