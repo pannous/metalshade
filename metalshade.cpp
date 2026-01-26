@@ -245,8 +245,7 @@ private:
         std::string shaderDir = getShaderDirectory(absFragPath);
 
         // Work in the shader's directory instead of /tmp/
-        std::string tempFrag = shaderDir + "/" + baseName + ".converted.frag";
-        std::string tempSpv = shaderDir + "/" + baseName + ".temp.spv";
+        std::string tempFrag = shaderDir + "/" + baseName + ".glsl";
 
         // Check if file is already in Vulkan format (has #version 450)
         std::ifstream checkFile(absFragPath);
@@ -278,18 +277,26 @@ private:
         std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
         std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
 
-        // Compile to SPIR-V and show errors with line numbers
-        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + outputFragSpv + "\" 2>&1";
+        // Compile to SPIR-V and show errors with line numbers (-S frag specifies fragment shader)
+        std::string compileCmd = "glslangValidator -S frag -V \"" + tempFrag + "\" -o \"" + outputFragSpv + "\" 2>&1";
         int result = system(compileCmd.c_str());
         if (result != 0) {
             std::cerr << "✗ Shader compilation failed for: " << fragPath << std::endl;
-            std::cerr << "  Converted shader: " << tempFrag << std::endl;
+            std::cerr << "  GLSL shader: " << tempFrag << std::endl;
             return false;
         }
 
+        std::cout << "✓ Compiled: " << outputFragSpv << std::endl;
+
         // Copy generic vertex shader to shader-specific location
-        std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\" 2>/dev/null";
-        return system(copyVertCmd.c_str()) == 0;
+        std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\"";
+        if (system(copyVertCmd.c_str()) != 0) {
+            std::cerr << "✗ Failed to copy vertex shader" << std::endl;
+            return false;
+        }
+
+        std::cout << "✓ Vertex shader: " << outputVertSpv << std::endl;
+        return true;
     }
 
     void recreatePipeline() {
