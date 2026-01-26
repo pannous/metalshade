@@ -34,6 +34,7 @@ std::vector<char> readFile(const std::string& filename) {
 class ShaderToyViewer {
 public:
     void run() {
+        loadShaderList();
         initWindow();
         initVulkan();
         mainLoop();
@@ -84,6 +85,11 @@ private:
     int windowedPosX = 0;
     int windowedPosY = 0;
 
+    // Shader browsing
+    std::vector<std::string> shaderList;
+    int currentShaderIndex = 0;
+    std::string currentShaderPath;
+
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         if (action == GLFW_PRESS) {
             ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
@@ -92,6 +98,10 @@ private:
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
             } else if (key == GLFW_KEY_F || key == GLFW_KEY_F11) {
                 viewer->toggleFullscreen();
+            } else if (key == GLFW_KEY_LEFT) {
+                viewer->switchShader(-1);
+            } else if (key == GLFW_KEY_RIGHT) {
+                viewer->switchShader(1);
             }
         }
     }
@@ -116,6 +126,84 @@ private:
             glfwSetWindowMonitor(window, nullptr, windowedPosX, windowedPosY, windowedWidth, windowedHeight, 0);
             std::cout << "✓ Switched to windowed mode: " << windowedWidth << "x" << windowedHeight << std::endl;
         }
+    }
+
+    void loadShaderList() {
+        std::ifstream file("shader_list.txt");
+        if (!file.is_open()) {
+            std::cerr << "⚠ shader_list.txt not found, using default shader" << std::endl;
+            currentShaderPath = "shadertoy.frag";
+            return;
+        }
+
+        std::string line;
+        while (std::getline(file, line)) {
+            if (!line.empty()) {
+                shaderList.push_back(line);
+            }
+        }
+        file.close();
+
+        if (!shaderList.empty()) {
+            currentShaderPath = shaderList[0];
+            std::cout << "✓ Loaded " << shaderList.size() << " shaders" << std::endl;
+            std::cout << "  Use ← → to browse shaders" << std::endl;
+        } else {
+            currentShaderPath = "shadertoy.frag";
+        }
+    }
+
+    void switchShader(int delta) {
+        if (shaderList.empty()) {
+            std::cout << "⚠ No shader list available" << std::endl;
+            return;
+        }
+
+        currentShaderIndex = (currentShaderIndex + delta + shaderList.size()) % shaderList.size();
+        currentShaderPath = shaderList[currentShaderIndex];
+
+        std::cout << "\n[" << (currentShaderIndex + 1) << "/" << shaderList.size() << "] "
+                  << currentShaderPath << std::endl;
+
+        // Wait for device to be idle before recreating pipeline
+        vkDeviceWaitIdle(device);
+
+        // Recompile and reload shader
+        if (compileAndLoadShader(currentShaderPath)) {
+            recreatePipeline();
+            std::cout << "✓ Shader loaded" << std::endl;
+        } else {
+            std::cout << "✗ Failed to load shader" << std::endl;
+        }
+    }
+
+    bool compileAndLoadShader(const std::string& fragPath) {
+        // Convert Book of Shaders format to Vulkan GLSL
+        std::string tempFrag = "/tmp/current_shader.frag";
+        std::string tempSpv = "/tmp/current_shader.spv";
+
+        std::string convertCmd = "python3 /tmp/convert_book_of_shaders.py \"" + fragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
+        if (system(convertCmd.c_str()) != 0) {
+            return false;
+        }
+
+        // Compile to SPIR-V
+        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" 2>/dev/null";
+        if (system(compileCmd.c_str()) != 0) {
+            return false;
+        }
+
+        // Copy to frag.spv for pipeline creation
+        std::string copyCmd = "cp \"" + tempSpv + "\" frag.spv";
+        return system(copyCmd.c_str()) == 0;
+    }
+
+    void recreatePipeline() {
+        // Destroy old pipeline
+        vkDestroyPipeline(device, graphicsPipeline, nullptr);
+
+        // Recreate with new shader
+        createGraphicsPipeline();
     }
 
     void initWindow() {

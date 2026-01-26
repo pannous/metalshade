@@ -8,7 +8,7 @@ LDFLAGS = -framework Cocoa -framework IOKit -framework CoreVideo
 export VK_ICD_FILENAMES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json
 
 TARGET = shadertoy_viewer
-SRCS = shadertoy_viewer.cpp
+SRCS = metalshade.cpp
 SHADERS = vert.spv frag.spv
 
 all: $(TARGET)
