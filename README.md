@@ -38,34 +38,33 @@ make          # Compiles shaders (.vert/.frag → .spv) and C++ viewer
 
 ### Quick Start (One Command)
 
+In Claude Code:
 ```bash
-# 1. In Claude Code, fetch the shader:
-/fetch-shader https://www.shadertoy.com/view/XsXXDn
-
-# 2. Convert and compile automatically:
-./import_shader.sh XsXXDn creation_by_silexars
-
-# 3. Run it!
-./switch_shader.sh creation_by_silexars
+/import https://www.shadertoy.com/view/XsXXDn
 ./run.sh
 ```
 
-### Manual Method (Step by Step)
+That's it! The `/import` skill handles fetching, converting, compiling, and activating in one step.
+
+### Or use the standalone script:
 
 ```bash
-# 1. Fetch shader using browser automation:
-/fetch-shader https://www.shadertoy.com/view/4l2XWK
-
-# 2. Convert ShaderToy → Vulkan GLSL:
-./convert_shader.py shaders/bumped_sinusoidal_warp_raw.glsl
-
-# 3. Compile to SPIR-V:
-glslangValidator -V shaders/bumped_sinusoidal_warp.frag -o frag.spv
-
-# 4. View:
-./switch_shader.sh bumped_sinusoidal_warp
+./import https://www.shadertoy.com/view/XsXXDn
 ./run.sh
 ```
+
+### How It Works
+
+The `/import` skill (or `./import` script) performs these steps automatically:
+
+```bash
+1. Fetch shader using browser automation (Playwright)
+2. Convert ShaderToy GLSL → Vulkan GLSL
+3. Compile to SPIR-V (frag.spv)
+4. Activate shader (copy to shadertoy.frag)
+```
+
+All done in one command! See `README_IMPORT.md` for details.
 
 ### What Gets Converted
 
