@@ -40,9 +40,8 @@ public:
 
         // Compile the initial shader before starting Vulkan
         if (!currentShaderPath.empty() && !compileAndLoadShader(currentShaderPath)) {
-            std::cerr << "⚠ Failed to compile initial shader, falling back to default" << std::endl;
-            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
-            compileAndLoadShader(currentShaderPath); // Compile fallback shader
+            std::cerr << "\n✗ Shader compilation failed. Fix errors above and try again." << std::endl;
+            exit(1);
         }
 
         initWindow();
