@@ -35,6 +35,13 @@ class ShaderToyViewer {
 public:
     void run(const std::string& initialShader = "") {
         loadShaderList(initialShader);
+
+        // Compile the initial shader before starting Vulkan
+        if (!currentShaderPath.empty() && !compileAndLoadShader(currentShaderPath)) {
+            std::cerr << "⚠ Failed to compile initial shader, falling back to default" << std::endl;
+            currentShaderPath = "shadertoy.frag";
+        }
+
         initWindow();
         initVulkan();
         mainLoop();
@@ -199,6 +206,18 @@ private:
         std::cout << "✗ No working shaders found!" << std::endl;
     }
 
+    std::string getShaderBaseName(const std::string& path) {
+        size_t lastSlash = path.find_last_of("/\\");
+        size_t lastDot = path.find_last_of(".");
+        std::string filename = (lastSlash == std::string::npos) ? path : path.substr(lastSlash + 1);
+        return (lastDot == std::string::npos) ? filename : filename.substr(0, lastDot - (lastSlash == std::string::npos ? 0 : lastSlash + 1));
+    }
+
+    std::string getShaderDirectory(const std::string& path) {
+        size_t lastSlash = path.find_last_of("/\\");
+        return (lastSlash == std::string::npos) ? "." : path.substr(0, lastSlash);
+    }
+
     bool compileAndLoadShader(const std::string& fragPath) {
         // Convert Book of Shaders format to Vulkan GLSL
         std::string tempFrag = "/tmp/current_shader.frag";
@@ -215,8 +234,13 @@ private:
             return false;
         }
 
-        // Copy to frag.spv for pipeline creation
-        std::string copyCmd = "cp \"" + tempSpv + "\" frag.spv 2>/dev/null";
+        // Get shader base name and directory
+        std::string baseName = getShaderBaseName(fragPath);
+        std::string shaderDir = getShaderDirectory(fragPath);
+        std::string outputSpv = shaderDir + "/" + baseName + ".spv";
+
+        // Copy to shader-specific .spv file next to original
+        std::string copyCmd = "cp \"" + tempSpv + "\" \"" + outputSpv + "\" 2>/dev/null";
         return system(copyCmd.c_str()) == 0;
     }
 
@@ -534,8 +558,20 @@ private:
     }
 
     void createGraphicsPipeline() {
-        auto vertShaderCode = readFile("vert.spv");
-        auto fragShaderCode = readFile("frag.spv");
+        // Determine which .spv files to use
+        std::string vertSpvPath = "vert.spv";
+        std::string fragSpvPath;
+
+        if (!currentShaderPath.empty()) {
+            std::string baseName = getShaderBaseName(currentShaderPath);
+            std::string shaderDir = getShaderDirectory(currentShaderPath);
+            fragSpvPath = shaderDir + "/" + baseName + ".spv";
+        } else {
+            fragSpvPath = "frag.spv";
+        }
+
+        auto vertShaderCode = readFile(vertSpvPath);
+        auto fragShaderCode = readFile(fragSpvPath);
 
         VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
         VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
