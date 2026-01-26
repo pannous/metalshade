@@ -41,7 +41,8 @@ public:
         // Compile the initial shader before starting Vulkan
         if (!currentShaderPath.empty() && !compileAndLoadShader(currentShaderPath)) {
             std::cerr << "⚠ Failed to compile initial shader, falling back to default" << std::endl;
-            currentShaderPath = "shadertoy.frag";
+            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
+            compileAndLoadShader(currentShaderPath); // Compile fallback shader
         }
 
         initWindow();
@@ -148,7 +149,7 @@ private:
         std::ifstream file("shader_list.txt");
         if (!file.is_open()) {
             std::cerr << "⚠ shader_list.txt not found, using default shader" << std::endl;
-            currentShaderPath = "shadertoy.frag";
+            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
             return;
         }
 
@@ -165,7 +166,7 @@ private:
             std::cout << "✓ Loaded " << shaderList.size() << " shaders" << std::endl;
             std::cout << "  Use ← → to browse shaders" << std::endl;
         } else {
-            currentShaderPath = "shadertoy.frag";
+            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
         }
     }
 
@@ -243,10 +244,28 @@ private:
         // Convert to absolute path (works when working directory changes)
         std::string absFragPath = getAbsolutePath(fragPath);
 
-        // Use absolute path to converter script (works regardless of working directory)
-        std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
-        if (system(convertCmd.c_str()) != 0) {
-            return false;
+        // Check if file is already in Vulkan format (has #version 450)
+        std::ifstream checkFile(absFragPath);
+        std::string firstLine;
+        bool needsConversion = true;
+        if (checkFile.is_open() && std::getline(checkFile, firstLine)) {
+            if (firstLine.find("#version 450") != std::string::npos) {
+                // Already in Vulkan format, just copy it
+                needsConversion = false;
+                std::string copyCmd = "cp \"" + absFragPath + "\" \"" + tempFrag + "\"";
+                if (system(copyCmd.c_str()) != 0) {
+                    return false;
+                }
+            }
+        }
+        checkFile.close();
+
+        if (needsConversion) {
+            // Use absolute path to converter script (works regardless of working directory)
+            std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
+            if (system(convertCmd.c_str()) != 0) {
+                return false;
+            }
         }
 
         // Compile to SPIR-V (suppress errors for cleaner output)
