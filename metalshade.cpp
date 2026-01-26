@@ -244,9 +244,8 @@ private:
         std::string absFragPath = getAbsolutePath(fragPath);
 
         // Use absolute path to converter script (works regardless of working directory)
-        std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
+        std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
         if (system(convertCmd.c_str()) != 0) {
-            std::cerr << "Convert command failed: " << convertCmd << std::endl;
             return false;
         }
 
