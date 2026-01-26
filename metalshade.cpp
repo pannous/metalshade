@@ -262,15 +262,20 @@ private:
 
         if (needsConversion) {
             // Use absolute path to converter script (works regardless of working directory)
-            std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
-            if (system(convertCmd.c_str()) != 0) {
+            std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
+            int result = system(convertCmd.c_str());
+            if (result != 0) {
+                std::cerr << "✗ Shader conversion failed for: " << fragPath << std::endl;
                 return false;
             }
         }
 
-        // Compile to SPIR-V (suppress errors for cleaner output)
-        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" >/dev/null 2>&1";
-        if (system(compileCmd.c_str()) != 0) {
+        // Compile to SPIR-V and show errors with line numbers
+        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" 2>&1";
+        int result = system(compileCmd.c_str());
+        if (result != 0) {
+            std::cerr << "✗ Shader compilation failed for: " << fragPath << std::endl;
+            std::cerr << "  Converted shader location: " << tempFrag << std::endl;
             return false;
         }
 

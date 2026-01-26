@@ -24,6 +24,7 @@ shader = re.sub(r'^\s*uniform\s+vec2\s+u_mouse\s*;', '', shader, flags=re.MULTIL
 shader = re.sub(r'^\s*uniform\s+vec3\s+u_mouse\s*;', '', shader, flags=re.MULTILINE)
 shader = re.sub(r'^\s*uniform\s+float\s+u_time\s*;', '', shader, flags=re.MULTILINE)
 shader = re.sub(r'^\s*uniform\s+sampler2D\s+u_tex0\s*;', '', shader, flags=re.MULTILINE)
+shader = re.sub(r'^\s*uniform\s+vec2\s+u_tex0Resolution\s*;', '', shader, flags=re.MULTILINE)
 shader = re.sub(r'^\s*uniform\s+sampler2D\s+\w+\s*;', '', shader, flags=re.MULTILINE)
 
 # Replace uniform references (word boundaries to avoid replacing variables)
