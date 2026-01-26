@@ -36,12 +36,30 @@ make          # Compiles shaders (.vert/.frag → .spv) and C++ viewer
 
 ## Downloading Shaders
 
+### Browser Automation (Recommended)
+
+Using Claude Code with Playwright to bypass CloudFlare:
+
+```bash
+# In Claude Code session, use the /fetch-shader skill:
+/fetch-shader https://www.shadertoy.com/view/4l2XWK
+/fetch-shader 4l2XWK custom_name
+```
+
+This automatically:
+- Opens the shader page in a real browser
+- Waits for CloudFlare verification
+- Extracts shader name and code
+- Saves to `shaders/{name}_raw.glsl`
+
+### API Method (Limited)
+
 ```bash
 ./download_shader.sh https://www.shadertoy.com/view/4l2XWK  # Auto-fetch by URL
 ./download_shader.sh XsXXDn seascape                        # By ID with custom name
 ```
 
-**Note**: CloudFlare may block automated downloads. If this occurs, manually copy the shader code from ShaderToy and convert it.
+**Note**: ShaderToy API is CloudFlare-protected. Use browser automation or manually copy shader code.
 
 ## Switching Shaders
 
