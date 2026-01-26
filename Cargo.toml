@@ -1,0 +1,9 @@
+[package]
+name = "shadertoy2vulkan"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+naga = { version = "22", features = ["glsl-in", "spv-out"] }
+regex = "1"
+anyhow = "1"

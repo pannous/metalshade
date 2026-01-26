@@ -120,6 +120,26 @@ glslangValidator -V yourshader.frag -o frag.spv
 ./run.sh
 ```
 
+### Or Use the Rust Converter Tool
+
+For a faster, automated workflow, use the Rust-based converter:
+
+```bash
+# Convert and compile in one command
+./shadertoy2vulkan shaders/shader_raw.glsl shaders/shader.frag
+
+# This creates both shader.frag and shader.frag.spv
+```
+
+**Features:**
+- ✓ Automatic ShaderToy → Vulkan GLSL conversion
+- ✓ SPIR-V compilation (naga with glslangValidator fallback)
+- ✓ Single-step workflow
+- ✓ Fast Rust implementation
+- ✓ Better error messages
+
+See `CONVERTER_README.md` for details.
+
 ## Popular Shaders to Try
 
 See `popular_shaders.txt` for 40+ curated shaders organized by difficulty:
@@ -186,3 +206,15 @@ layout(binding = 3) uniform sampler2D iChannel2;
 - [ISF (Interactive Shader Format)](https://isf.video/) - Alternative shader format
 - [shadertoy-browser](https://github.com/repi/shadertoy-browser) - Rust-based browser
 - [Metal Shader Converter](https://developer.apple.com/metal/shader-converter/) - Apple's GLSL→MSL tool
+
+### Noteworthy
+thebookofshaders/
+09/dots5.frag
+11/lava-lamp.frag
+13/clouds.frag
+thebookofshaders/11/tmp
+warp-grid.frag
+simplex-pattern-04.frag
+simplex-pattern-03.frag
+circleWave-noiseChannels.frag
+3d-snoise-normal.frag

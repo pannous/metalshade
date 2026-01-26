@@ -88,18 +88,19 @@ fi
 echo ""
 echo "Found shader: $RAW_FILE"
 echo ""
-echo "Step 2: Converting to Vulkan GLSL..."
-./convert_shader.py "$RAW_FILE" "$FRAG_FILE"
-
-echo ""
-echo "Step 3: Compiling to SPIR-V..."
-if glslangValidator -V "$FRAG_FILE" -o frag.spv 2>&1 | grep -q "ERROR"; then
-    echo "❌ Compilation failed!"
-    glslangValidator -V "$FRAG_FILE" -o frag.spv
+echo "Step 2: Converting to Vulkan GLSL and compiling to SPIR-V..."
+if ! ./shadertoy2vulkan "$RAW_FILE" "$FRAG_FILE"; then
+    echo "❌ Conversion/compilation failed!"
     exit 1
 fi
 
-echo "✓ Compiled successfully: frag.spv"
+# The shadertoy2vulkan tool creates both .frag and .frag.spv
+# We need to copy the .frag.spv to frag.spv for the build system
+SPV_FILE="${FRAG_FILE}.spv"
+if [ -f "$SPV_FILE" ]; then
+    cp "$SPV_FILE" frag.spv
+    echo "✓ Copied SPIR-V to frag.spv"
+fi
 echo ""
 echo "Step 4: Ready to run!"
 echo ""
