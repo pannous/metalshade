@@ -286,9 +286,8 @@ private:
         std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
         std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
 
-        // Compile to SPIR-V and show errors with line numbers (-S frag specifies fragment shader)
-        // Reformat errors to GCC-style format (filename:line: error: message) for Sublime Text
-        std::string compileCmd = "glslangValidator -S frag -V \"" + tempFrag + "\" -o \"" + outputFragSpv + "\" 2>&1 | sed 's/^ERROR: \\(.*\\):\\([0-9]*\\): /\\1:\\2: error: /'";
+        // Compile to SPIR-V using wrapper script that adds source line context
+        std::string compileCmd = "/opt/3d/metalshade/glsl_compile.sh \"" + tempFrag + "\" \"" + outputFragSpv + "\"";
         int result = system(compileCmd.c_str());
         if (result != 0) {
             std::cerr << "✗ Shader compilation failed for: " << fragPath << std::endl;
