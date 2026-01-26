@@ -51,3 +51,33 @@ Using browser automation (Playwright), successfully fetched:
 Both saved to shaders/ directory with _raw.glsl suffix.
 Ready for Vulkan GLSL conversion.
 
+
+## Automatic Conversion Success! 
+
+Created complete toolchain for ShaderToy import:
+
+**convert_shader.py** - Intelligent GLSL converter:
+- Handles ShaderToy → Vulkan GLSL translation
+- Smart replacement avoiding double-substitution
+- Expands code-golf macros (#define t, #define r)
+- Preserves variable declarations correctly
+
+**import_shader.sh** - One-command workflow:
+- Fetch → Convert → Compile in single command
+- Validates each step
+- Clear error messages and next steps
+
+**Successfully converted & compiled**:
+1. Creation by Silexars (XsXXDn) - 462 chars, legendary 1K WebGL intro
+2. Bumped Sinusoidal Warp (4l2XWK) - 7687 chars, sophisticated effects
+
+Both shaders compile to valid SPIR-V with zero manual edits needed!
+
+**Key technical challenges solved**:
+- Double-replacement issue (iResolution → ubo.ubo.iResolution) 
+  Fixed with negative lookbehind: `(?<!ubo\.)\biResolution\b`
+- Code-golf macro expansion (t, r shortcuts)
+  Fixed with careful word boundary detection
+- Variable declaration handling (float t = iTime)
+  Works correctly with simple global replacement
+

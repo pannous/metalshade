@@ -34,32 +34,48 @@ brew install molten-vk glfw glslang
 make          # Compiles shaders (.vert/.frag → .spv) and C++ viewer
 ```
 
-## Downloading Shaders
+## Importing ShaderToy Shaders
 
-### Browser Automation (Recommended)
-
-Using Claude Code with Playwright to bypass CloudFlare:
+### Quick Start (One Command)
 
 ```bash
-# In Claude Code session, use the /fetch-shader skill:
+# 1. In Claude Code, fetch the shader:
+/fetch-shader https://www.shadertoy.com/view/XsXXDn
+
+# 2. Convert and compile automatically:
+./import_shader.sh XsXXDn creation_by_silexars
+
+# 3. Run it!
+./switch_shader.sh creation_by_silexars
+./run.sh
+```
+
+### Manual Method (Step by Step)
+
+```bash
+# 1. Fetch shader using browser automation:
 /fetch-shader https://www.shadertoy.com/view/4l2XWK
-/fetch-shader 4l2XWK custom_name
+
+# 2. Convert ShaderToy → Vulkan GLSL:
+./convert_shader.py shaders/bumped_sinusoidal_warp_raw.glsl
+
+# 3. Compile to SPIR-V:
+glslangValidator -V shaders/bumped_sinusoidal_warp.frag -o frag.spv
+
+# 4. View:
+./switch_shader.sh bumped_sinusoidal_warp
+./run.sh
 ```
 
-This automatically:
-- Opens the shader page in a real browser
-- Waits for CloudFlare verification
-- Extracts shader name and code
-- Saves to `shaders/{name}_raw.glsl`
+### What Gets Converted
 
-### API Method (Limited)
-
-```bash
-./download_shader.sh https://www.shadertoy.com/view/4l2XWK  # Auto-fetch by URL
-./download_shader.sh XsXXDn seascape                        # By ID with custom name
-```
-
-**Note**: ShaderToy API is CloudFlare-protected. Use browser automation or manually copy shader code.
+The conversion script automatically:
+- ✓ Adds Vulkan `#version 450` header
+- ✓ Converts `mainImage()` → `main()`
+- ✓ Wraps uniforms in UBO: `iTime` → `ubo.iTime`
+- ✓ Expands code-golf shortcuts: `t` → `ubo.iTime`, `r` → `ubo.iResolution.xy`
+- ✓ Handles texture channels (iChannel0-3)
+- ✓ Preserves shader credits and comments
 
 ## Switching Shaders
 
