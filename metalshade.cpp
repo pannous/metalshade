@@ -8,6 +8,8 @@
 #include <chrono>
 #include <cstring>
 #include <cmath>
+#include <climits>  // For PATH_MAX
+#include <unistd.h> // For getcwd
 
 const int WIDTH = 1280;
 const int HEIGHT = 720;
@@ -218,13 +220,33 @@ private:
         return (lastSlash == std::string::npos) ? "." : path.substr(0, lastSlash);
     }
 
+    std::string getAbsolutePath(const std::string& path) {
+        // If already absolute, return as-is
+        if (!path.empty() && path[0] == '/') {
+            return path;
+        }
+
+        // Get current working directory and prepend to relative path
+        char cwd[PATH_MAX];
+        if (getcwd(cwd, sizeof(cwd)) != nullptr) {
+            return std::string(cwd) + "/" + path;
+        }
+
+        return path; // Fallback to original
+    }
+
     bool compileAndLoadShader(const std::string& fragPath) {
         // Convert Book of Shaders format to Vulkan GLSL
         std::string tempFrag = "/tmp/current_shader.frag";
         std::string tempSpv = "/tmp/current_shader.spv";
 
-        std::string convertCmd = "python3 convert_book_of_shaders.py \"" + fragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
+        // Convert to absolute path (works when working directory changes)
+        std::string absFragPath = getAbsolutePath(fragPath);
+
+        // Use absolute path to converter script (works regardless of working directory)
+        std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
         if (system(convertCmd.c_str()) != 0) {
+            std::cerr << "Convert command failed: " << convertCmd << std::endl;
             return false;
         }
 
@@ -234,14 +256,21 @@ private:
             return false;
         }
 
-        // Get shader base name and directory
-        std::string baseName = getShaderBaseName(fragPath);
-        std::string shaderDir = getShaderDirectory(fragPath);
-        std::string outputSpv = shaderDir + "/" + baseName + ".spv";
+        // Get shader base name and directory (use absolute path)
+        std::string baseName = getShaderBaseName(absFragPath);
+        std::string shaderDir = getShaderDirectory(absFragPath);
+        std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
+        std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
 
-        // Copy to shader-specific .spv file next to original
-        std::string copyCmd = "cp \"" + tempSpv + "\" \"" + outputSpv + "\" 2>/dev/null";
-        return system(copyCmd.c_str()) == 0;
+        // Copy fragment shader to shader-specific .spv file next to original
+        std::string copyFragCmd = "cp \"" + tempSpv + "\" \"" + outputFragSpv + "\" 2>/dev/null";
+        if (system(copyFragCmd.c_str()) != 0) {
+            return false;
+        }
+
+        // Copy generic vertex shader to shader-specific location
+        std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\" 2>/dev/null";
+        return system(copyVertCmd.c_str()) == 0;
     }
 
     void recreatePipeline() {
@@ -559,15 +588,17 @@ private:
 
     void createGraphicsPipeline() {
         // Determine which .spv files to use
-        std::string vertSpvPath = "vert.spv";
+        std::string vertSpvPath;
         std::string fragSpvPath;
 
         if (!currentShaderPath.empty()) {
             std::string baseName = getShaderBaseName(currentShaderPath);
             std::string shaderDir = getShaderDirectory(currentShaderPath);
-            fragSpvPath = shaderDir + "/" + baseName + ".spv";
+            vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
+            fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
         } else {
-            fragSpvPath = "frag.spv";
+            vertSpvPath = "/opt/3d/metalshade/vert.spv";
+            fragSpvPath = "/opt/3d/metalshade/frag.spv";
         }
 
         auto vertShaderCode = readFile(vertSpvPath);
