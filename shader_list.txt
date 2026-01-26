@@ -1,5 +1,3 @@
-thebookofshaders/00/cmyk-halftone.frag
-thebookofshaders/00/halftone.frag
 thebookofshaders/02/hello_world.frag
 thebookofshaders/03/space.frag
 thebookofshaders/03/time.frag
@@ -41,7 +39,6 @@ thebookofshaders/08/cross-rotate.frag
 thebookofshaders/08/cross-scale.frag
 thebookofshaders/08/cross-translate.frag
 thebookofshaders/08/cross.frag
-thebookofshaders/08/matrices.frag
 thebookofshaders/08/matrix.frag
 thebookofshaders/08/yuv.frag
 thebookofshaders/09/bricks.frag
@@ -124,8 +121,6 @@ thebookofshaders/12/cracks.frag
 thebookofshaders/12/metaballs.frag
 thebookofshaders/12/stippling.frag
 thebookofshaders/12/tissue.frag
-thebookofshaders/12/tmp/particle-gradient.frag
-thebookofshaders/12/tmp/particle-texture.frag
 thebookofshaders/12/vorono-00.frag
 thebookofshaders/12/vorono-01.frag
 thebookofshaders/13/1d-fbm.frag
@@ -134,22 +129,4 @@ thebookofshaders/13/clouds.frag
 thebookofshaders/13/noise.frag
 thebookofshaders/13/ridge.frag
 thebookofshaders/13/turbulence.frag
-thebookofshaders/15/texture-kaleidoscope.frag
-thebookofshaders/15/texture-noise.frag
-thebookofshaders/15/texture-resolution.frag
-thebookofshaders/15/texture-sprite.frag
-thebookofshaders/15/texture-stereo.frag
-thebookofshaders/15/texture.frag
-thebookofshaders/16/add.frag
-thebookofshaders/16/blend.frag
-thebookofshaders/16/diff.frag
-thebookofshaders/16/div.frag
-thebookofshaders/16/inv.frag
-thebookofshaders/16/mult.frag
-thebookofshaders/16/operations.frag
-thebookofshaders/16/sub.frag
-thebookofshaders/18/grain.frag
-thebookofshaders/18/hatch.frag
 thebookofshaders/18/lut-plain.frag
-thebookofshaders/18/lut.frag
-thebookofshaders/src/moon/moon.frag

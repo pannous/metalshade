@@ -159,22 +159,37 @@ private:
             return;
         }
 
-        currentShaderIndex = (currentShaderIndex + delta + shaderList.size()) % shaderList.size();
-        currentShaderPath = shaderList[currentShaderIndex];
+        int attempts = 0;
+        const int maxAttempts = shaderList.size();
 
-        std::cout << "\n[" << (currentShaderIndex + 1) << "/" << shaderList.size() << "] "
-                  << currentShaderPath << std::endl;
+        while (attempts < maxAttempts) {
+            currentShaderIndex = (currentShaderIndex + delta + shaderList.size()) % shaderList.size();
+            currentShaderPath = shaderList[currentShaderIndex];
 
-        // Wait for device to be idle before recreating pipeline
-        vkDeviceWaitIdle(device);
+            std::cout << "\n[" << (currentShaderIndex + 1) << "/" << shaderList.size() << "] "
+                      << currentShaderPath << std::endl;
 
-        // Recompile and reload shader
-        if (compileAndLoadShader(currentShaderPath)) {
-            recreatePipeline();
-            std::cout << "✓ Shader loaded" << std::endl;
-        } else {
-            std::cout << "✗ Failed to load shader" << std::endl;
+            // Recompile and reload shader
+            if (compileAndLoadShader(currentShaderPath)) {
+                // Wait for device to be idle before recreating pipeline
+                vkDeviceWaitIdle(device);
+
+                try {
+                    recreatePipeline();
+                    std::cout << "✓ Shader loaded" << std::endl;
+                    return; // Success!
+                } catch (const std::exception& e) {
+                    std::cout << "✗ Pipeline error: " << e.what() << std::endl;
+                }
+            } else {
+                std::cout << "✗ Compilation failed, trying next..." << std::endl;
+            }
+
+            // Try next shader
+            attempts++;
         }
+
+        std::cout << "✗ No working shaders found!" << std::endl;
     }
 
     bool compileAndLoadShader(const std::string& fragPath) {
@@ -182,19 +197,19 @@ private:
         std::string tempFrag = "/tmp/current_shader.frag";
         std::string tempSpv = "/tmp/current_shader.spv";
 
-        std::string convertCmd = "python3 /tmp/convert_book_of_shaders.py \"" + fragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
+        std::string convertCmd = "python3 convert_book_of_shaders.py \"" + fragPath + "\" \"" + tempFrag + "\" 2>/dev/null";
         if (system(convertCmd.c_str()) != 0) {
             return false;
         }
 
-        // Compile to SPIR-V
-        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" 2>/dev/null";
+        // Compile to SPIR-V (suppress errors for cleaner output)
+        std::string compileCmd = "glslangValidator -V \"" + tempFrag + "\" -o \"" + tempSpv + "\" >/dev/null 2>&1";
         if (system(compileCmd.c_str()) != 0) {
             return false;
         }
 
         // Copy to frag.spv for pipeline creation
-        std::string copyCmd = "cp \"" + tempSpv + "\" frag.spv";
+        std::string copyCmd = "cp \"" + tempSpv + "\" frag.spv 2>/dev/null";
         return system(copyCmd.c_str()) == 0;
     }
 
