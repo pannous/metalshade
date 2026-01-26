@@ -7,8 +7,7 @@ SHADER_NAME="$1"
 if [ -z "$SHADER_NAME" ]; then
     echo "Available shaders:"
     echo ""
-    ls -1 examples/*.frag 2>/dev/null | sed 's/examples\//  /' | sed 's/\.frag$//' || echo "  No example shaders found"
-    ls -1 shaders/*.frag 2>/dev/null | sed 's/shaders\//  /' | sed 's/\.frag$//' || true
+    ls -1 shaders/*.frag 2>/dev/null | sed 's/shaders\//  /' | sed 's/\.frag$//' || echo "  No shaders found"
     echo "  shadertoy (default - bumped sinusoidal warp)"
     echo ""
     echo "Usage: $0 <shader_name>"
@@ -26,8 +25,6 @@ SHADER_FILE=""
 
 if [ "$SHADER_NAME" = "shadertoy" ]; then
     SHADER_FILE="shadertoy.frag"
-elif [ -f "examples/${SHADER_NAME}.frag" ]; then
-    SHADER_FILE="examples/${SHADER_NAME}.frag"
 elif [ -f "shaders/${SHADER_NAME}.frag" ]; then
     SHADER_FILE="shaders/${SHADER_NAME}.frag"
 else

@@ -34,6 +34,15 @@ brew install molten-vk glfw glslang
 make          # Compiles shaders (.vert/.frag → .spv) and C++ viewer
 ```
 
+## Downloading Shaders
+
+```bash
+./download_shader.sh https://www.shadertoy.com/view/4l2XWK  # Auto-fetch by URL
+./download_shader.sh XsXXDn seascape                        # By ID with custom name
+```
+
+**Note**: CloudFlare may block automated downloads. If this occurs, manually copy the shader code from ShaderToy and convert it.
+
 ## Switching Shaders
 
 ```bash
@@ -43,7 +52,7 @@ make          # Compiles shaders (.vert/.frag → .spv) and C++ viewer
 ./switch_shader.sh                  # List all available
 ```
 
-Run `./run.sh` after switching to see the new shader.
+All shaders are stored in `shaders/`. Run `./run.sh` after switching to see the new shader.
 
 ## Converting ShaderToy Shaders
 
