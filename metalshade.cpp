@@ -98,6 +98,7 @@ private:
     std::vector<std::string> shaderList;
     int currentShaderIndex = 0;
     std::string currentShaderPath;
+    bool hasGeometryShader = false;
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         if (action == GLFW_PRESS) {
@@ -232,6 +233,21 @@ private:
         return false;
     }
 
+    bool fileExists(const std::string& path) {
+        std::ifstream file(path);
+        return file.good();
+    }
+
+    std::string findMatchingShader(const std::string& basePath, const std::string& shaderDir, const std::vector<std::string>& extensions) {
+        for (const auto& ext : extensions) {
+            std::string candidatePath = shaderDir + "/" + basePath + ext;
+            if (fileExists(candidatePath)) {
+                return candidatePath;
+            }
+        }
+        return "";
+    }
+
     std::string getAbsolutePath(const std::string& path) {
         // If already absolute, return as-is
         if (!path.empty() && path[0] == '/') {
@@ -309,14 +325,48 @@ private:
 
         std::cout << "✓ Compiled: " << outputFragSpv << std::endl;
 
-        // Copy generic vertex shader to shader-specific location
-        std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\"";
-        if (system(copyVertCmd.c_str()) != 0) {
-            std::cerr << "✗ Failed to copy vertex shader" << std::endl;
-            return false;
+        // Look for matching vertex shader (.vsh, .vert)
+        std::vector<std::string> vertExts = {".vsh", ".vert"};
+        std::string vertShaderPath = findMatchingShader(baseName, shaderDir, vertExts);
+
+        if (!vertShaderPath.empty()) {
+            // Found matching vertex shader - compile it
+            std::cout << "✓ Found vertex shader: " << vertShaderPath << std::endl;
+            std::string compileVertCmd = "glslangValidator -S vert -V \"" + vertShaderPath + "\" -o \"" + outputVertSpv + "\"";
+            if (system(compileVertCmd.c_str()) != 0) {
+                std::cerr << "✗ Vertex shader compilation failed" << std::endl;
+                return false;
+            }
+            std::cout << "✓ Compiled vertex shader: " << outputVertSpv << std::endl;
+        } else {
+            // Use default vertex shader
+            std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\"";
+            if (system(copyVertCmd.c_str()) != 0) {
+                std::cerr << "✗ Failed to copy vertex shader" << std::endl;
+                return false;
+            }
+            std::cout << "✓ Using default vertex shader: " << outputVertSpv << std::endl;
         }
 
-        std::cout << "✓ Vertex shader: " << outputVertSpv << std::endl;
+        // Look for matching geometry shader (.gsh, .geom)
+        std::vector<std::string> geomExts = {".gsh", ".geom"};
+        std::string geomShaderPath = findMatchingShader(baseName, shaderDir, geomExts);
+
+        if (!geomShaderPath.empty()) {
+            // Found matching geometry shader - compile it
+            std::cout << "✓ Found geometry shader: " << geomShaderPath << std::endl;
+            std::string outputGeomSpv = shaderDir + "/" + baseName + ".geom.spv";
+            std::string compileGeomCmd = "glslangValidator -S geom -V \"" + geomShaderPath + "\" -o \"" + outputGeomSpv + "\"";
+            if (system(compileGeomCmd.c_str()) != 0) {
+                std::cerr << "✗ Geometry shader compilation failed" << std::endl;
+                return false;
+            }
+            std::cout << "✓ Compiled geometry shader: " << outputGeomSpv << std::endl;
+            hasGeometryShader = true;
+        } else {
+            hasGeometryShader = false;
+        }
+
         return true;
     }
 
@@ -601,6 +651,9 @@ private:
         uboLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         uboLayoutBinding.descriptorCount = 1;
         uboLayoutBinding.stageFlags = VK_SHADER_STAGE_VERTEX_BIT | VK_SHADER_STAGE_FRAGMENT_BIT;
+        if (hasGeometryShader) {
+            uboLayoutBinding.stageFlags |= VK_SHADER_STAGE_GEOMETRY_BIT;
+        }
 
         VkDescriptorSetLayoutBinding samplerLayoutBinding{};
         samplerLayoutBinding.binding = 1;
@@ -637,12 +690,14 @@ private:
         // Determine which .spv files to use
         std::string vertSpvPath;
         std::string fragSpvPath;
+        std::string geomSpvPath;
 
         if (!currentShaderPath.empty()) {
             std::string baseName = getShaderBaseName(currentShaderPath);
             std::string shaderDir = getShaderDirectory(currentShaderPath);
             vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
             fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
+            geomSpvPath = shaderDir + "/" + baseName + ".geom.spv";
         } else {
             vertSpvPath = "/opt/3d/metalshade/vert.spv";
             fragSpvPath = "/opt/3d/metalshade/frag.spv";
@@ -666,7 +721,24 @@ private:
         fragShaderStageInfo.module = fragShaderModule;
         fragShaderStageInfo.pName = "main";
 
-        VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
+        std::vector<VkPipelineShaderStageCreateInfo> shaderStages = {vertShaderStageInfo, fragShaderStageInfo};
+
+        // Load geometry shader if it exists
+        VkShaderModule geomShaderModule = VK_NULL_HANDLE;
+        if (hasGeometryShader && fileExists(geomSpvPath)) {
+            auto geomShaderCode = readFile(geomSpvPath);
+            geomShaderModule = createShaderModule(geomShaderCode);
+
+            VkPipelineShaderStageCreateInfo geomShaderStageInfo{};
+            geomShaderStageInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+            geomShaderStageInfo.stage = VK_SHADER_STAGE_GEOMETRY_BIT;
+            geomShaderStageInfo.module = geomShaderModule;
+            geomShaderStageInfo.pName = "main";
+
+            // Insert geometry shader between vertex and fragment
+            shaderStages.insert(shaderStages.begin() + 1, geomShaderStageInfo);
+            std::cout << "✓ Using geometry shader in pipeline" << std::endl;
+        }
 
         VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
         vertexInputInfo.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -734,8 +806,8 @@ private:
 
         VkGraphicsPipelineCreateInfo pipelineInfo{};
         pipelineInfo.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-        pipelineInfo.stageCount = 2;
-        pipelineInfo.pStages = shaderStages;
+        pipelineInfo.stageCount = static_cast<uint32_t>(shaderStages.size());
+        pipelineInfo.pStages = shaderStages.data();
         pipelineInfo.pVertexInputState = &vertexInputInfo;
         pipelineInfo.pInputAssemblyState = &inputAssembly;
         pipelineInfo.pViewportState = &viewportState;
@@ -752,6 +824,9 @@ private:
 
         vkDestroyShaderModule(device, fragShaderModule, nullptr);
         vkDestroyShaderModule(device, vertShaderModule, nullptr);
+        if (geomShaderModule != VK_NULL_HANDLE) {
+            vkDestroyShaderModule(device, geomShaderModule, nullptr);
+        }
     }
 
     void createFramebuffers() {
