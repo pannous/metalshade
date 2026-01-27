@@ -220,6 +220,18 @@ private:
         return (lastSlash == std::string::npos) ? "." : path.substr(0, lastSlash);
     }
 
+    bool isVulkanReadyShader(const std::string& path) {
+        // Check if file has an extension that indicates it's already in Vulkan format
+        const std::vector<std::string> vulkanExts = {".glsl", ".fsh", ".gsh", ".vsh"};
+        for (const auto& ext : vulkanExts) {
+            if (path.size() >= ext.size() &&
+                path.substr(path.size() - ext.size()) == ext) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     std::string getAbsolutePath(const std::string& path) {
         // If already absolute, return as-is
         if (!path.empty() && path[0] == '/') {
@@ -243,14 +255,14 @@ private:
         std::string baseName = getShaderBaseName(absFragPath);
         std::string shaderDir = getShaderDirectory(absFragPath);
 
-        // Check if input is already a .glsl file
-        bool isGlslFile = (fragPath.size() >= 5 && fragPath.substr(fragPath.size() - 5) == ".glsl");
+        // Check if input is already in Vulkan-ready format (.glsl, .fsh, .gsh, .vsh)
+        bool isVulkanReady = isVulkanReadyShader(fragPath);
 
         std::string tempFrag;
-        if (isGlslFile) {
-            // Already a .glsl file, use it directly
+        if (isVulkanReady) {
+            // Already in Vulkan format, use it directly
             tempFrag = absFragPath;
-            std::cout << "✓ Using GLSL shader: " << tempFrag << std::endl;
+            std::cout << "✓ Using Vulkan shader: " << tempFrag << std::endl;
         } else {
             // Need to convert from .frag to .glsl
             tempFrag = shaderDir + "/" + baseName + ".glsl";
