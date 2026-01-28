@@ -28,10 +28,16 @@ shader = re.sub(r'^\s*uniform\s+vec2\s+u_tex0Resolution\s*;', '', shader, flags=
 shader = re.sub(r'^\s*uniform\s+sampler2D\s+\w+\s*;', '', shader, flags=re.MULTILINE)
 
 # Replace uniform references (word boundaries to avoid replacing variables)
+# Book of Shaders format
 shader = re.sub(r'\bu_time\b', 'ubo.iTime', shader)
 shader = re.sub(r'\bu_resolution\b', 'ubo.iResolution.xy', shader)
 shader = re.sub(r'\bu_mouse\b', 'ubo.iMouse.xy', shader)
 shader = re.sub(r'\bu_tex0\b', 'iChannel0', shader)
+
+# ShaderToy format (if not already prefixed with ubo.)
+shader = re.sub(r'(?<!ubo\.)\biTime\b', 'ubo.iTime', shader)
+shader = re.sub(r'(?<!ubo\.)\biResolution\b', 'ubo.iResolution', shader)
+shader = re.sub(r'(?<!ubo\.)\biMouse\b', 'ubo.iMouse', shader)
 
 # Replace gl_FragCoord and gl_FragColor
 shader = re.sub(r'\bgl_FragCoord\b', 'fragCoord', shader)
@@ -39,6 +45,9 @@ shader = re.sub(r'\bgl_FragColor\b', 'fragColor', shader)
 
 # Replace texture2D with texture (Vulkan GLSL uses texture())
 shader = re.sub(r'\btexture2D\b', 'texture', shader)
+
+# Convert ShaderToy mainImage to main
+shader = re.sub(r'\bvoid\s+mainImage\s*\(\s*out\s+vec4\s+fragColor\s*,\s*in\s+vec2\s+fragCoord\s*\)', 'void main()', shader)
 
 # Add Vulkan header
 vulkan_header = """#version 450
