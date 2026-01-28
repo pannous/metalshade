@@ -6,6 +6,10 @@ Native ShaderToy shader viewer using **Vulkan + MoltenVK** to render GLSL shader
 ShaderToy GLSL → SPIR-V → Vulkan API → MoltenVK → Metal → macOS Display
 ```
 
+for qemu alpine use commits:
+a485898e27 2026-01-22 12:26 chore: Update notes with working vkcube - 273 FPS!
+e641e51141 2026-01-22 12:25 feature(major): Refactor vkcube to use HOST_VISIBLE + copy path - WORKING!
+
 ## Quick Start
 
 ```bash

@@ -311,8 +311,13 @@ private:
         }
 
         // Output .spv files in the same directory
-        std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
-        std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
+        // Special case: shadertoy.frag outputs to frag.spv for compatibility
+        std::string outputFragSpv = (baseName == "shadertoy")
+            ? shaderDir + "/frag.spv"
+            : shaderDir + "/" + baseName + ".frag.spv";
+        std::string outputVertSpv = (baseName == "shadertoy")
+            ? shaderDir + "/vert.spv"
+            : shaderDir + "/" + baseName + ".vert.spv";
 
         // Compile to SPIR-V using wrapper script that adds source line context
         std::string compileCmd = "/opt/3d/metalshade/glsl_compile.sh \"" + tempFrag + "\" \"" + outputFragSpv + "\"";
@@ -332,7 +337,7 @@ private:
         if (!vertShaderPath.empty()) {
             // Found matching vertex shader - compile it
             std::cout << "✓ Found vertex shader: " << vertShaderPath << std::endl;
-            std::string compileVertCmd = "glslangValidator -S vert -V \"" + vertShaderPath + "\" -o \"" + outputVertSpv + "\"";
+            std::string compileVertCmd = "glslangValidator -S vert -V \"" + vertShaderPath + "\" -o \"" + outputVertSpv + "\" -I\"" + shaderDir + "\"";
             if (system(compileVertCmd.c_str()) != 0) {
                 std::cerr << "✗ Vertex shader compilation failed" << std::endl;
                 return false;
@@ -356,7 +361,7 @@ private:
             // Found matching geometry shader - compile it
             std::cout << "✓ Found geometry shader: " << geomShaderPath << std::endl;
             std::string outputGeomSpv = shaderDir + "/" + baseName + ".geom.spv";
-            std::string compileGeomCmd = "glslangValidator -S geom -V \"" + geomShaderPath + "\" -o \"" + outputGeomSpv + "\"";
+            std::string compileGeomCmd = "glslangValidator -S geom -V \"" + geomShaderPath + "\" -o \"" + outputGeomSpv + "\" -I\"" + shaderDir + "\"";
             if (system(compileGeomCmd.c_str()) != 0) {
                 std::cerr << "✗ Geometry shader compilation failed" << std::endl;
                 return false;
@@ -695,9 +700,16 @@ private:
         if (!currentShaderPath.empty()) {
             std::string baseName = getShaderBaseName(currentShaderPath);
             std::string shaderDir = getShaderDirectory(currentShaderPath);
-            vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
-            fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
-            geomSpvPath = shaderDir + "/" + baseName + ".geom.spv";
+            // Special case: shadertoy.frag uses frag.spv/vert.spv for compatibility
+            if (baseName == "shadertoy") {
+                vertSpvPath = shaderDir + "/vert.spv";
+                fragSpvPath = shaderDir + "/frag.spv";
+                geomSpvPath = shaderDir + "/shadertoy.geom.spv";
+            } else {
+                vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
+                fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
+                geomSpvPath = shaderDir + "/" + baseName + ".geom.spv";
+            }
         } else {
             vertSpvPath = "/opt/3d/metalshade/vert.spv";
             fragSpvPath = "/opt/3d/metalshade/frag.spv";

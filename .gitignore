@@ -1,6 +1,6 @@
 # Build artifacts
 *.spv
-shadertoy_viewer
+metalshade
 test_vulkan
 
 # Downloaded shaders
@@ -16,3 +16,8 @@ shaders/
 *~
 .vscode/
 .idea/
+
+
+# Added by cargo
+
+/target

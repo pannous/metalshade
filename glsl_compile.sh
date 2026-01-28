@@ -4,8 +4,11 @@
 SHADER_FILE="$1"
 OUTPUT_FILE="$2"
 
-# Run glslangValidator and capture output
-OUTPUT=$(glslangValidator -S frag -V "$SHADER_FILE" -o "$OUTPUT_FILE" 2>&1)
+# Get the directory of the shader file for includes
+SHADER_DIR=$(dirname "$SHADER_FILE")
+
+# Run glslangValidator with include support and capture output
+OUTPUT=$(glslangValidator -S frag -V "$SHADER_FILE" -o "$OUTPUT_FILE" -I"$SHADER_DIR" 2>&1)
 RESULT=$?
 
 # Process output line by line

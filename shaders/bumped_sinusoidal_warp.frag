@@ -205,11 +205,11 @@ void main(){
     texCol = smoothstep(.05, .75, pow(texCol, vec3(.75, .8, .85)));
 
     // Textureless. Simple and elegant... so it clearly didn't come from me. Thanks Fabrice. :)
-    //vec3 texCol = smoothFract( W(sp.xy).xyy )*.1 + .2;
+    vec3 texCol2 = smoothFract( W(sp.xy).xyy )*.1 + .2;
 
     // FINAL COLOR
     // Using the values above to produce the final color.
-    vec3 col = (texCol*(diff*vec3(1, .97, .92)*2. + .5) + vec3(1, .6, .2)*spec*2.)*atten;
+    vec3 col = ((texCol2+texCol)*(diff*vec3(1, .97, .92)*2. + .5) + vec3(1, .6, .2)*spec*2.)*atten;
 
     // Faux environment mapping: I added this in at a later date out of sheer boredome, and
     // because I like shiny stuff. You can comment it out if it's not to your liking. :)

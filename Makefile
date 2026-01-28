@@ -7,13 +7,12 @@ LDFLAGS = -framework Cocoa -framework IOKit -framework CoreVideo
 # MoltenVK configuration
 export VK_ICD_FILENAMES=/opt/homebrew/etc/vulkan/icd.d/MoltenVK_icd.json
 
-TARGET = shadertoy_viewer
+TARGET = metalshade
 SRCS = metalshade.cpp
-SHADERS = vert.spv frag.spv
 
 all: $(TARGET)
 
-$(TARGET): $(SRCS) $(SHADERS)
+$(TARGET): $(SRCS)
 	$(CXX) $(CXXFLAGS) $(VULKAN_FLAGS) $(SRCS) -o $(TARGET) $(VULKAN_LIBS) $(LDFLAGS)
 	@echo "✓ Built ShaderToy Viewer with Vulkan+MoltenVK support"
 
