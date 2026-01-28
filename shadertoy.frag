@@ -9,213 +9,79 @@ layout(binding = 0) uniform UniformBufferObject {
     vec4 iMouse;
 } ubo;
 
-layout(binding = 1) uniform sampler2D iChannel0;
-// layout(binding = 2) uniform sampler2D iChannel1;
-// layout(binding = 3) uniform sampler2D iChannel2;
-// layout(binding = 4) uniform sampler2D iChannel3;
-
 /*
+    HSB Morphing Animation
+    ----------------------
 
-	Bumped Sinusoidal Warp
-	----------------------
+    Animated transition between two HSB color representations:
+    1. Rectangular gradient (hue × brightness)
+    2. Color wheel (polar: angle → hue, radius → saturation)
 
-	Sinusoidal planar deformation, or the 2D sine warp effect to people
-	like me. The effect has been around for years, and there are
-	countless examples on the net. IQ's "Sculpture III" is basically a
-	much more sophisticated, spherical variation.
+    Features:
+    - Smooth oscillating morph between representations
+    - Rotating polar coordinates
+    - Wave-based distortion effects
+    - Radial ripples during transitions
+    - Subtle brightness pulsing
 
-    This particular version was modified from Fabrice's "Plop 2," which in
-	turn was a simplified version of Fantomas's "Plop." I simply reduced
-	the frequency and iteration count in order to make it less busy.
-
-	I also threw in a texture, added point-lit bump mapping, speckles...
-	and that's pretty much it. As for why a metallic surface would be
-	defying	the laws of physics and moving like this is anyone's guess. :)
-
-	By the way, I have a 3D version, similar to this, that I'll put up at
-	a later date.
-
-	Related examples:
-
-    Fantomas - Plop
-    https://www.shadertoy.com/view/ltSSDV
-
-    Fabrice - Plop 2
-    https://www.shadertoy.com/view/MlSSDV
-
-	IQ - Sculpture III (loosely related)
-	https://www.shadertoy.com/view/XtjSDK
-
-	Shane - Lit Sine Warp (far less code)
-	https://www.shadertoy.com/view/Ml2XDV
-
+    Based on The Book of Shaders Chapter 06 examples:
+    - thebookofshaders/06/hsb.frag
+    - thebookofshaders/06/hsb-colorwheel.frag
 */
 
-// Warp function. Variations have been around for years. This is
-// almost the same as Fabrice's version:
-// Fabrice - Plop 2
-// https://www.shadertoy.com/view/MlSSDV
-vec2 W(vec2 p){
+#define TWO_PI 6.28318530718
 
-    p = (p + 3.)*4.;
-
-    float t = ubo.iTime/2.;
-
-    // Layered, sinusoidal feedback, with time component.
-    for (int i=0; i<3; i++){
-        p += cos(p.yx*3. + vec2(t, 1.57))/3.;
-        p += sin(p.yx + t + vec2(1.57, 0))/2.;
-        p *= 1.3;
-    }
-
-    // A bit of jitter to counter the high frequency sections (reduced for smoother appearance).
-    p += fract(sin(p+vec2(13, 7))*5e5)*.005 - .0025;
-
-    return mod(p, 2.) - 1.; // Range: [vec2(-1), vec2(1)]
-
+vec3 hsb2rgb(in vec3 c) {
+    vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
+    rgb = rgb*rgb*(3.0-2.0*rgb);
+    return c.z * mix(vec3(1.0), rgb, c.y);
 }
 
-// Bump mapping function. Put whatever you want here. In this case,
-// we're returning the length of the sinusoidal warp function.
-float bumpFunc(vec2 p){
+void main() {
+    vec2 st = fragCoord / ubo.iResolution.xy;
+    vec3 color = vec3(0.0);
 
-	return length(W(p))*.7071; // Range: [0, 1]
+    // Smooth oscillation between two representations (3 second cycle)
+    float morph = sin(ubo.iTime * 0.5) * 0.5 + 0.5;
 
-}
+    // Pulsing rotation speed increases with morph factor
+    float rotation = ubo.iTime * 0.3 * morph;
+    vec2 center = vec2(0.5);
 
-/*
-// Standard ray-plane intersection.
-vec3 rayPlane(vec3 p, vec3 o, vec3 n, vec3 rd) {
+    // Calculate polar coordinates with rotation
+    vec2 toCenter = st - center;
+    float angle = atan(toCenter.y, toCenter.x) + rotation;
+    float radius = length(toCenter) * 2.0;
 
-    float dn = dot(rd, n);
+    // Mode 1: Rectangular HSB gradient (like hsb.frag)
+    vec3 colorRect = hsb2rgb(vec3(st.x, 1.0, st.y));
 
-    float s = 1e8;
+    // Mode 2: Polar color wheel (like hsb-colorwheel.frag)
+    vec3 colorWheel = hsb2rgb(vec3((angle/TWO_PI)+0.5, radius, 1.0));
 
-    if (abs(dn) > 0.0001) {
-        s = dot(p-o, n) / dn;
-        s += float(s < 0.0) * 1e8;
-    }
+    // Create interference wave patterns that sweep across screen
+    float waveX = sin(st.x * TWO_PI * 2.0 + ubo.iTime * 2.0) * 0.5 + 0.5;
+    float waveY = sin(st.y * TWO_PI * 2.0 - ubo.iTime * 2.0) * 0.5 + 0.5;
+    float wavePattern = waveX * waveY;
 
-    return o + s*rd;
-}
-*/
+    // Blend factor modulated by wave pattern
+    float blendFactor = morph * (0.7 + wavePattern * 0.3);
 
-vec3 smoothFract(vec3 x){ x = fract(x); return min(x, x*(1.-x)*12.); }
+    // Radial distortion effect (strongest during mid-transition)
+    float transitionPeak = sin(morph * 3.14159);
+    float distortion = sin(radius * 5.0 - ubo.iTime * 3.0) * 0.1 * transitionPeak;
+    vec2 distortedSt = st + toCenter * distortion;
+    distortedSt = clamp(distortedSt, 0.0, 1.0);
 
-void main(){
+    // Recalculate rectangular mode with distortion
+    vec3 colorRectDist = hsb2rgb(vec3(distortedSt.x, 1.0, distortedSt.y));
 
-    // Screen coordinates.
-	vec2 uv = (fragCoord - ubo.iResolution.xy*.5)/ubo.iResolution.y;
+    // Smooth blend between the two representations
+    color = mix(colorRectDist, colorWheel, blendFactor);
 
-    // PLANE ROTATION
-    //
-    // Rotating the canvas back and forth. I don't feel it adds value, in this case,
-    // but feel free to uncomment it.
-    //float th = sin(ubo.iTime*0.1)*sin(ubo.iTime*0.12)*2.;
-    //float cs = cos(th), si = sin(th);
-    //uv *= mat2(cs, -si, si, cs);
+    // Subtle brightness pulse synchronized with morph
+    float pulse = sin(ubo.iTime * 1.5) * 0.1 + 0.9;
+    color *= pulse;
 
-    // VECTOR SETUP - surface postion, ray origin, unit direction vector, and light postion.
-    //
-    // Setup: I find 2D bump mapping more intuitive to pretend I'm raytracing, then lighting a
-    // bump mapped plane situated at the origin. Others may disagree. :)
-    vec3 sp = vec3(uv, 0); // Surface posion, or hit point. Essentially, a screen at the origin.
-    vec3 rd = normalize(vec3(uv, 1)); // Unit direction vector. From the origin to the screen plane.
-    vec3 lp = vec3(cos(ubo.iTime)*.5, sin(ubo.iTime)*.2, -1); // Light position - Back from the screen.
-	vec3 sn = vec3(0, 0, -1); // Plane normal. Z pointing toward the viewer.
-
-/*
-	// I deliberately left this block in to show that the above is a simplified version
-	// of a raytraced plane. The "rayPlane" equation is commented out above.
-	vec3 rd = normalize(vec3(uv, 1));
-	vec3 ro = vec3(0, 0, -1);
-
-	// Plane normal.
-	vec3 sn = normalize(vec3(cos(ubo.iTime)*.25, sin(ubo.iTime)*.25, -1));
-    //vec3 sn = normalize(vec3(0, 0, -1));
-
-	vec3 sp = rayPlane(vec3(0), ro, sn, rd);
-    vec3 lp = vec3(cos(ubo.iTime)*.5, sin(ubo.iTime)*.25, -1);
-*/
-
-    // BUMP MAPPING - PERTURBING THE NORMAL
-    //
-    // Setting up the bump mapping variables. Normally, you'd amalgamate a lot of the following,
-    // and roll it into a single function, but I wanted to show the workings.
-    //
-    // f - Function value
-    // fx - Change in "f" in in the X-direction.
-    // fy - Change in "f" in in the Y-direction.
-    vec2 eps = vec2(4./ubo.iResolution.y, 0);
-
-    float f = bumpFunc(sp.xy); // Sample value multiplied by the amplitude.
-    float fx = bumpFunc(sp.xy - eps.xy); // Same for the nearby sample in the X-direction.
-    float fy = bumpFunc(sp.xy - eps.yx); // Same for the nearby sample in the Y-direction.
-
- 	// Controls how much the bump is accentuated.
-	const float bumpFactor = .05;
-
-    // Using the above to determine the dx and dy function gradients.
-    fx = (fx - f)/eps.x; // Change in X
-    fy = (fy - f)/eps.x; // Change in Y.
-    // Using the gradient vector, "vec3(fx, fy, 0)," to perturb the XY plane normal ",vec3(0, 0, -1)."
-    // By the way, there's a redundant step I'm skipping in this particular case, on account of the
-    // normal only having a Z-component. Normally, though, you'd need the commented stuff below.
-    //vec3 grad = vec3(fx, fy, 0);
-    //grad -= sn*dot(sn, grad);
-    //sn = normalize(sn + grad*bumpFactor );
-    sn = normalize(sn + vec3(fx, fy, 0)*bumpFactor);
-    // Equivalent to the following.
-    //sn = cross(-vec3(1, 0, fx*bumpFactor), vec3(0, 1, fy*bumpFactor));
-    //sn = normalize(sn);
-
-    // LIGHTING
-    //
-	// Determine the light direction vector, calculate its distance, then normalize it.
-	vec3 ld = lp - sp;
-	float lDist = max(length(ld), .0001);
-	ld /= lDist;
-
-    // Light attenuation.
-    float atten = 1./(1. + lDist*lDist*.15);
-	//float atten = min(1./(lDist*lDist*1.), 1.);
-
-    // Using the bump function, "f," to darken the crevices. Completely optional, but I
-    // find it gives extra depth.
-    atten *= f*.9 + .1; // Or... f*f*.7 + .3; //  pow(f, .75); // etc.
-
-	// Diffuse value.
-	float diff = max(dot(sn, ld), 0.);
-    // Enhancing the diffuse value a bit. Made up.
-    diff = pow(diff, 4.)*.66 + pow(diff, 8.)*.34;
-    // Specular highlighting.
-    float spec = pow(max(dot( reflect(-ld, sn), -rd), 0.), 12.);
-    //float spec = pow(max(dot(normalize(ld - rd), sn), 0.), 32.);
-
-    // TEXTURE COLOR
-    //
-	// Combining the surface postion with a fraction of the warped surface position to index
-    // into the texture. The result is a slightly warped texture, as a opposed to a completely
-    // warped one. By the way, the warp function is called above in the "bumpFunc" function,
-    // so it's kind of wasteful doing it again here, but the function is kind of cheap, and
-    // it's more readable this way.
-    vec3 texCol = texture(iChannel0, sp.xy + W(sp.xy)/8.).xyz;
-    texCol *= texCol; // Rough sRGB to linear conversion... That's a whole other conversation. :)
-    // A bit of color processing.
-    texCol = smoothstep(.05, .75, pow(texCol, vec3(.75, .8, .85)));
-
-    // Textureless. Simple and elegant... so it clearly didn't come from me. Thanks Fabrice. :)
-    vec3 texCol2 = smoothFract( W(sp.xy).xyy )*.1 + .2;
-
-    // FINAL COLOR
-    // Using the values above to produce the final color.
-    vec3 col = ((texCol2+texCol)*(diff*vec3(1, .97, .92)*2. + .5) + vec3(1, .6, .2)*spec*2.)*atten;
-
-    // Faux environment mapping: I added this in at a later date out of sheer boredome, and
-    // because I like shiny stuff. You can comment it out if it's not to your liking. :)
-    float ref = max(dot(reflect(rd, sn), vec3(1)), 0.);
-    col += col*pow(ref, 4.)*vec3(.25, .5, 1)*3.;
-
-    // Perform some statistically unlikely (but close enough) 2.0 gamma correction. :)
-	fragColor = vec4(sqrt(clamp(col, 0., 1.)), 1);
+    fragColor = vec4(color, 1.0);
 }
