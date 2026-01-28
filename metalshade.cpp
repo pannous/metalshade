@@ -146,27 +146,23 @@ private:
             return;
         }
 
+        // Default to shadertoy.frag
+        currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
+
+        // Load shader list for browsing with arrow keys (optional)
         std::ifstream file("shader_list.txt");
-        if (!file.is_open()) {
-            std::cerr << "⚠ shader_list.txt not found, using default shader" << std::endl;
-            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
-            return;
-        }
-
-        std::string line;
-        while (std::getline(file, line)) {
-            if (!line.empty()) {
-                shaderList.push_back(line);
+        if (file.is_open()) {
+            std::string line;
+            while (std::getline(file, line)) {
+                if (!line.empty()) {
+                    shaderList.push_back(line);
+                }
             }
-        }
-        file.close();
-
-        if (!shaderList.empty()) {
-            currentShaderPath = shaderList[0];
-            std::cout << "✓ Loaded " << shaderList.size() << " shaders" << std::endl;
-            std::cout << "  Use ← → to browse shaders" << std::endl;
-        } else {
-            currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
+            file.close();
+            if (!shaderList.empty()) {
+                std::cout << "✓ Loaded " << shaderList.size() << " shaders for browsing" << std::endl;
+                std::cout << "  Use ← → to browse shaders" << std::endl;
+            }
         }
     }
 
