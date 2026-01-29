@@ -10,6 +10,8 @@
 #include <cmath>
 #include <climits>  // For PATH_MAX
 #include <unistd.h> // For getcwd
+#include <dirent.h> // For directory scanning
+#include <algorithm> // For std::sort
 
 const int WIDTH = 1280;
 const int HEIGHT = 720;
@@ -143,11 +145,10 @@ private:
         if (!initialShader.empty()) {
             currentShaderPath = initialShader;
             std::cout << "✓ Loading shader: " << currentShaderPath << std::endl;
-            return;
         }
-
-        // Default to shadertoy.frag
-        currentShaderPath = "/opt/3d/metalshade/shadertoy.frag";
+        else{
+           currentShaderPath = "shaders/example.frag";
+        }
 
         // Load shader list for browsing with arrow keys (optional)
         std::ifstream file("shader_list.txt");
@@ -166,10 +167,59 @@ private:
         }
     }
 
+    void scanDirectoryForShaders(const std::string& directory) {
+        shaderList.clear();
+
+        DIR* dir = opendir(directory.c_str());
+        if (!dir) {
+            std::cout << "⚠ Could not scan directory: " << directory << std::endl;
+            return;
+        }
+
+        struct dirent* entry;
+        std::vector<std::string> shaderExts = {".frag", ".glsl", ".fsh", ".gsh", ".vsh"};
+
+        while ((entry = readdir(dir)) != nullptr) {
+            std::string filename = entry->d_name;
+
+            // Check if file has a shader extension
+            for (const auto& ext : shaderExts) {
+                if (filename.size() >= ext.size() &&
+                    filename.substr(filename.size() - ext.size()) == ext) {
+                    std::string fullPath = directory + "/" + filename;
+                    shaderList.push_back(fullPath);
+                    break;
+                }
+            }
+        }
+        closedir(dir);
+
+        // Sort for consistent ordering
+        std::sort(shaderList.begin(), shaderList.end());
+
+        // Find current shader index
+        for (size_t i = 0; i < shaderList.size(); i++) {
+            if (shaderList[i] == currentShaderPath) {
+                currentShaderIndex = i;
+                break;
+            }
+        }
+
+        if (!shaderList.empty()) {
+            std::cout << "✓ Found " << shaderList.size() << " shader(s) in directory" << std::endl;
+        }
+    }
+
     void switchShader(int delta) {
         if (shaderList.empty()) {
-            std::cout << "⚠ No shader list available" << std::endl;
-            return;
+            // Try to scan current directory for shaders
+            std::string shaderDir = getShaderDirectory(currentShaderPath);
+            scanDirectoryForShaders(shaderDir);
+
+            if (shaderList.empty()) {
+                std::cout << "⚠ No shaders found in " << shaderDir << std::endl;
+                return;
+            }
         }
 
         int attempts = 0;
@@ -297,7 +347,7 @@ private:
 
             if (needsConversion) {
                 // Use absolute path to converter script (works regardless of working directory)
-                std::string convertCmd = "python3 /opt/3d/metalshade/convert_book_of_shaders.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
+                std::string convertCmd = "python3 /opt/3d/metalshade/convert.py \"" + absFragPath + "\" \"" + tempFrag + "\"";
                 int result = system(convertCmd.c_str());
                 if (result != 0) {
                     std::cerr << "✗ Shader conversion failed for: " << fragPath << std::endl;
@@ -307,13 +357,8 @@ private:
         }
 
         // Output .spv files in the same directory
-        // Special case: shadertoy.frag outputs to frag.spv for compatibility
-        std::string outputFragSpv = (baseName == "shadertoy")
-            ? shaderDir + "/frag.spv"
-            : shaderDir + "/" + baseName + ".frag.spv";
-        std::string outputVertSpv = (baseName == "shadertoy")
-            ? shaderDir + "/vert.spv"
-            : shaderDir + "/" + baseName + ".vert.spv";
+        std::string outputFragSpv = shaderDir + "/" + baseName + ".frag.spv";
+        std::string outputVertSpv = shaderDir + "/" + baseName + ".vert.spv";
 
         // Compile to SPIR-V using wrapper script that adds source line context
         std::string compileCmd = "/opt/3d/metalshade/glsl_compile.sh \"" + tempFrag + "\" \"" + outputFragSpv + "\"";
@@ -339,14 +384,6 @@ private:
                 return false;
             }
             std::cout << "✓ Compiled vertex shader: " << outputVertSpv << std::endl;
-        } else {
-            // Use default vertex shader
-            std::string copyVertCmd = "cp /opt/3d/metalshade/vert.spv \"" + outputVertSpv + "\"";
-            if (system(copyVertCmd.c_str()) != 0) {
-                std::cerr << "✗ Failed to copy vertex shader" << std::endl;
-                return false;
-            }
-            std::cout << "✓ Using default vertex shader: " << outputVertSpv << std::endl;
         }
 
         // Look for matching geometry shader (.gsh, .geom)
@@ -693,22 +730,17 @@ private:
         std::string fragSpvPath;
         std::string geomSpvPath;
 
-        if (!currentShaderPath.empty()) {
-            std::string baseName = getShaderBaseName(currentShaderPath);
-            std::string shaderDir = getShaderDirectory(currentShaderPath);
-            // Special case: shadertoy.frag uses frag.spv/vert.spv for compatibility
-            if (baseName == "shadertoy") {
-                vertSpvPath = shaderDir + "/vert.spv";
-                fragSpvPath = shaderDir + "/frag.spv";
-                geomSpvPath = shaderDir + "/shadertoy.geom.spv";
-            } else {
-                vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
-                fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
-                geomSpvPath = shaderDir + "/" + baseName + ".geom.spv";
-            }
-        } else {
-            vertSpvPath = "/opt/3d/metalshade/vert.spv";
-            fragSpvPath = "/opt/3d/metalshade/frag.spv";
+        // if (currentShaderPath.empty()
+        std::string baseName = getShaderBaseName(currentShaderPath);
+        std::string shaderDir = getShaderDirectory(currentShaderPath);
+        vertSpvPath = shaderDir + "/" + baseName + ".vert.spv";
+        fragSpvPath = shaderDir + "/" + baseName + ".frag.spv";
+        geomSpvPath = shaderDir + "/" + baseName + ".geom.spv";
+
+        // Use fallback vertex shader if custom one doesn't exist
+        if (!fileExists(vertSpvPath)) {
+            vertSpvPath = "/opt/3d/metalshade/shaders/example.vert.spv";
+            std::cout << "✓ Using default vertex shader" << std::endl;
         }
 
         auto vertShaderCode = readFile(vertSpvPath);
