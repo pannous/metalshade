@@ -140,10 +140,40 @@ private:
         }
     }
 
+    std::string resolveFragmentShader(const std::string& path) {
+        // If a vertex/geometry shader is provided, try to find corresponding fragment shader
+        std::vector<std::string> vertGeomExts = {".vert", ".vsh", ".geom", ".gsh"};
+
+        for (const auto& ext : vertGeomExts) {
+            if (path.size() >= ext.size() &&
+                path.substr(path.size() - ext.size()) == ext) {
+                // This is a vertex/geometry shader, find the fragment shader
+                std::string baseName = getShaderBaseName(path);
+                std::string shaderDir = getShaderDirectory(path);
+
+                // Try common fragment shader extensions
+                std::vector<std::string> fragExts = {".frag", ".fsh"};
+                for (const auto& fragExt : fragExts) {
+                    std::string fragPath = shaderDir + "/" + baseName + fragExt;
+                    if (fileExists(fragPath)) {
+                        std::cout << "✓ Detected vertex/geometry shader, using fragment shader: " << fragPath << std::endl;
+                        return fragPath;
+                    }
+                }
+
+                std::cerr << "⚠ Could not find corresponding fragment shader for: " << path << std::endl;
+                std::cerr << "  Tried: " << baseName << ".frag, " << baseName << ".fsh" << std::endl;
+                return path; // Fallback to original (will likely fail)
+            }
+        }
+
+        return path; // Not a vertex/geometry shader, use as-is
+    }
+
     void loadShaderList(const std::string& initialShader = "") {
         // If a specific shader was provided via command line, use it
         if (!initialShader.empty()) {
-            currentShaderPath = initialShader;
+            currentShaderPath = resolveFragmentShader(initialShader);
             std::cout << "✓ Loading shader: " << currentShaderPath << std::endl;
         }
         else{
