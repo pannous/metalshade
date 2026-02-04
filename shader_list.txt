@@ -1,3 +1,4 @@
+shaders/rainbow_flow.frag
 shaders/crystalline_vortex.frag
 shaders/clouds_bookofshaders.frag
 shaders/bumped_sinusoidal_warp.frag
