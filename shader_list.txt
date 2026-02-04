@@ -1,4 +1,7 @@
-thebookofshaders/02/hello_world.frag
+shaders/crystalline_vortex.frag
+shaders/clouds_bookofshaders.frag
+shaders/bumped_sinusoidal_warp.frag
+/opt/3d/metalshade/shaders/plasma.frag
 thebookofshaders/03/space.frag
 thebookofshaders/03/time.frag
 thebookofshaders/04/openFrameworks/bin/data/shader.frag
