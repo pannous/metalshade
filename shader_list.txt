@@ -1,3 +1,4 @@
+shaders/galaxy_photo_warp.frag
 shaders/galaxy_warp.frag
 shaders/rainbow_flow.frag
 shaders/crystalline_vortex.frag
