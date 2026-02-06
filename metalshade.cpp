@@ -24,6 +24,7 @@ struct UniformBufferObject {
     alignas(16) float iResolution[3];
     alignas(4) float iTime;
     alignas(16) float iMouse[4];
+    alignas(4) float iZoom;
 };
 
 std::vector<char> readFile(const std::string& filename) {
@@ -39,7 +40,7 @@ std::vector<char> readFile(const std::string& filename) {
     return buffer;
 }
 
-class ShaderToyViewer {
+class MetalshadeViewer {
 public:
     void run(const std::string& initialShader = "") {
         loadShaderList(initialShader);
@@ -106,6 +107,7 @@ private:
     double mouseClickX = 0.0;
     double mouseClickY = 0.0;
     bool mousePressed = false;
+    float zoomLevel = 1.0f;
 
     // Shader browsing
     std::vector<std::string> shaderList;
@@ -116,7 +118,7 @@ private:
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
         if (action == GLFW_PRESS) {
-            ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
+            MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
 
             if (key == GLFW_KEY_ESCAPE) {
                 glfwSetWindowShouldClose(window, GLFW_TRUE);
@@ -131,7 +133,7 @@ private:
     }
 
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
-        ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
+        MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             if (action == GLFW_PRESS) {
                 viewer->mousePressed = true;
@@ -144,9 +146,17 @@ private:
     }
 
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
-        ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
+        MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
         viewer->mouseX = xpos;
         viewer->mouseY = ypos;
+    }
+
+    static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
+        MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
+        // Zoom in/out based on scroll direction
+        viewer->zoomLevel *= (1.0f + static_cast<float>(yoffset) * 0.1f);
+        // Clamp zoom level to reasonable range
+        viewer->zoomLevel = std::max(0.1f, std::min(viewer->zoomLevel, 10.0f));
     }
 
     void toggleFullscreen() {
@@ -631,7 +641,7 @@ private:
         glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
         glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
         glfwWindowHint(GLFW_COCOA_RETINA_FRAMEBUFFER, GLFW_TRUE);
-        window = glfwCreateWindow(WIDTH, HEIGHT, "ShaderToy Viewer (Vulkan/MoltenVK)", nullptr, nullptr);
+        window = glfwCreateWindow(WIDTH, HEIGHT, "Metalshade Viewer (Vulkan/MoltenVK)", nullptr, nullptr);
         if (!window) {
             throw std::runtime_error("Failed to create GLFW window!");
         }
@@ -641,6 +651,7 @@ private:
         glfwSetKeyCallback(window, keyCallback);
         glfwSetMouseButtonCallback(window, mouseButtonCallback);
         glfwSetCursorPosCallback(window, cursorPosCallback);
+        glfwSetScrollCallback(window, scrollCallback);
 
         std::cout << "✓ GLFW window created" << std::endl;
         startTime = std::chrono::steady_clock::now();
@@ -671,7 +682,7 @@ private:
     void createInstance() {
         VkApplicationInfo appInfo{};
         appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-        appInfo.pApplicationName = "ShaderToy Viewer";
+        appInfo.pApplicationName = "Metalshade Viewer";
         appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
         appInfo.pEngineName = "No Engine";
         appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
@@ -1569,6 +1580,8 @@ private:
             ubo.iMouse[3] = -scaledClickY;
         }
 
+        ubo.iZoom = zoomLevel;
+
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
 
@@ -1625,8 +1638,11 @@ private:
     }
 
     void mainLoop() {
-        std::cout << "✓ Running ShaderToy shader via Vulkan → MoltenVK → Metal" << std::endl;
+        std::cout << "✓ Running Metalshade shader via Vulkan → MoltenVK → Metal" << std::endl;
         std::cout << "Controls:" << std::endl;
+        std::cout << "  Mouse - Interactive effects" << std::endl;
+        std::cout << "  Scroll wheel - Zoom in/out" << std::endl;
+        std::cout << "  ← → - Switch shaders" << std::endl;
         std::cout << "  F or F11 - Toggle fullscreen" << std::endl;
         std::cout << "  ESC - Exit" << std::endl;
 
@@ -1681,7 +1697,7 @@ private:
 };
 
 int main(int argc, char* argv[]) {
-    ShaderToyViewer app;
+    MetalshadeViewer app;
     try {
         // Check if a shader path was provided as command-line argument
         if (argc > 1) {

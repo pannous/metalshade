@@ -7,6 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     vec3 iResolution;
     float iTime;
     vec4 iMouse;
+    float iZoom;
 } ubo;
 
 layout(binding = 1) uniform sampler2D iChannel0;
@@ -25,6 +26,7 @@ layout(binding = 1) uniform sampler2D iChannel0;
     Controls:
     - Move mouse to change colors
     - Click and hold to create ripples
+    - Scroll wheel to zoom in/out (centered on mouse)
 */
 
 #define PI 3.14159265359
@@ -50,8 +52,11 @@ void main() {
     vec2 clickPos = abs(ubo.iMouse.zw) / ubo.iResolution.xy;
     bool isPressed = ubo.iMouse.z > 0.0;
 
-    // Calculate distance from mouse
-    float distToMouse = length(uv - mouse);
+    // Apply zoom centered on mouse position
+    vec2 zoomedUv = mouse + (uv - mouse) / ubo.iZoom;
+
+    // Calculate distance from mouse (use zoomed coordinates for effects)
+    float distToMouse = length(zoomedUv - mouse);
 
     // Base color influenced by mouse position
     float hue = mouse.x;
@@ -60,17 +65,17 @@ void main() {
     // Create ripples from click position when mouse is pressed
     float rippleEffect = 0.0;
     if (isPressed) {
-        rippleEffect = ripple(uv, clickPos, ubo.iTime, 5.0);
+        rippleEffect = ripple(zoomedUv, clickPos, ubo.iTime, 5.0);
         // Add additional ripples at different frequencies
-        rippleEffect += ripple(uv, clickPos, ubo.iTime * 1.3, 7.0) * 0.5;
-        rippleEffect += ripple(uv, clickPos, ubo.iTime * 0.7, 3.0) * 0.3;
+        rippleEffect += ripple(zoomedUv, clickPos, ubo.iTime * 1.3, 7.0) * 0.5;
+        rippleEffect += ripple(zoomedUv, clickPos, ubo.iTime * 0.7, 3.0) * 0.3;
     }
 
     // Create a glow effect around the mouse cursor
     float cursorGlow = exp(-distToMouse * 8.0);
 
     // Swirling effect based on angle to mouse
-    vec2 toMouse = mouse - uv;
+    vec2 toMouse = mouse - zoomedUv;
     float angle = atan(toMouse.y, toMouse.x);
     float spiralHue = hue + angle / (2.0 * PI) + distToMouse * 2.0;
 
@@ -89,7 +94,7 @@ void main() {
     for (float i = 0.0; i < 5.0; i++) {
         float t = i / 5.0;
         vec2 trailPos = mix(clickPos, mouse, t);
-        float trailDist = length(uv - trailPos);
+        float trailDist = length(zoomedUv - trailPos);
         trail += exp(-trailDist * 30.0) * (1.0 - t * 0.5);
     }
     color += vec3(trail * 0.5);
@@ -101,9 +106,9 @@ void main() {
         color += vec3(waveMask * 0.4);
     }
 
-    // Subtle animated background texture
-    vec2 texCoord = uv + vec2(sin(uv.y * 10.0 + ubo.iTime * 0.5) * 0.02,
-                               cos(uv.x * 10.0 + ubo.iTime * 0.5) * 0.02);
+    // Subtle animated background texture (use zoomed coordinates)
+    vec2 texCoord = zoomedUv + vec2(sin(zoomedUv.y * 10.0 + ubo.iTime * 0.5) * 0.02,
+                                     cos(zoomedUv.x * 10.0 + ubo.iTime * 0.5) * 0.02);
     vec3 texColor = texture(iChannel0, texCoord).rgb;
     color = mix(color, texColor * color, 0.2);
 

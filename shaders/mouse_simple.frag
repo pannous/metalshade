@@ -7,6 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     vec3 iResolution;
     float iTime;
     vec4 iMouse;
+    float iZoom;
 } ubo;
 
 /*
@@ -21,6 +22,7 @@ layout(binding = 0) uniform UniformBufferObject {
     This is a minimal example showing how to use ubo.iMouse:
     - iMouse.xy = current mouse position
     - iMouse.zw = click position (negative when not pressed)
+    - Scroll wheel to zoom in/out
 */
 
 void main() {
@@ -31,16 +33,19 @@ void main() {
     vec2 clickPos = abs(ubo.iMouse.zw) / ubo.iResolution.xy;
     bool isPressed = ubo.iMouse.z > 0.0;
 
+    // Apply zoom centered on mouse position
+    vec2 zoomedUv = mouse + (uv - mouse) / ubo.iZoom;
+
     // Base color controlled by mouse position
     vec3 color = vec3(mouse.x, mouse.y, 0.5);
 
-    // Add gradient based on distance from mouse
-    float distToMouse = length(uv - mouse);
+    // Add gradient based on distance from mouse (use zoomed coordinates)
+    float distToMouse = length(zoomedUv - mouse);
     color += vec3(1.0 - distToMouse);
 
-    // When clicked, show a bright circle at click position
+    // When clicked, show a bright circle at click position (use zoomed coordinates)
     if (isPressed) {
-        float distToClick = length(uv - clickPos);
+        float distToClick = length(zoomedUv - clickPos);
         float circle = smoothstep(0.15, 0.1, distToClick);
         color += vec3(circle * 2.0);
 
