@@ -245,6 +245,12 @@ private:
         }
     }
 
+    std::string getCompiledSpvPath(const std::string& shaderPath) {
+        std::string baseName = getShaderBaseName(shaderPath);
+        std::string shaderDir = getShaderDirectory(shaderPath);
+        return shaderDir + "/" + baseName + ".frag.spv";
+    }
+
     void switchShader(int delta) {
         if (shaderList.empty()) {
             // Try to scan current directory for shaders
@@ -257,12 +263,22 @@ private:
             }
         }
 
+        // Get the current compiled shader path to avoid duplicates
+        std::string currentSpvPath = getCompiledSpvPath(currentShaderPath);
+
         int attempts = 0;
         const int maxAttempts = shaderList.size();
 
         while (attempts < maxAttempts) {
             currentShaderIndex = (currentShaderIndex + delta + shaderList.size()) % shaderList.size();
             currentShaderPath = shaderList[currentShaderIndex];
+
+            // Skip if this shader compiles to the same .spv file
+            std::string candidateSpvPath = getCompiledSpvPath(currentShaderPath);
+            if (candidateSpvPath == currentSpvPath) {
+                attempts++;
+                continue;
+            }
 
             std::cout << "\n[" << (currentShaderIndex + 1) << "/" << shaderList.size() << "] "
                       << currentShaderPath << std::endl;
