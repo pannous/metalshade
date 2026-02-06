@@ -50,5 +50,21 @@ void main() {
         color += vec3(ring);
     }
 
+    // Add a bright crosshair at exact mouse position for verification
+    vec2 mousePixel = ubo.iMouse.xy;
+    vec2 fragPixel = fragCoord;
+
+    // Vertical line
+    float crosshairV = smoothstep(2.0, 0.0, abs(fragPixel.x - mousePixel.x)) *
+                       smoothstep(15.0, 0.0, abs(fragPixel.y - mousePixel.y));
+    // Horizontal line
+    float crosshairH = smoothstep(2.0, 0.0, abs(fragPixel.y - mousePixel.y)) *
+                       smoothstep(15.0, 0.0, abs(fragPixel.x - mousePixel.x));
+    // Center dot
+    float centerDot = smoothstep(3.0, 1.0, length(fragPixel - mousePixel));
+
+    float crosshair = max(max(crosshairV, crosshairH), centerDot);
+    color = mix(color, vec3(1.0, 1.0, 0.0), crosshair * 0.8); // Yellow crosshair
+
     fragColor = vec4(color, 1.0);
 }

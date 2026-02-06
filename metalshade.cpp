@@ -1542,19 +1542,31 @@ private:
         ubo.iResolution[2] = 1.0f;
         ubo.iTime = time;
 
+        // Get window size to calculate framebuffer scale (for Retina displays)
+        int windowWidth, windowHeight;
+        glfwGetWindowSize(window, &windowWidth, &windowHeight);
+        float scaleX = static_cast<float>(swapchainExtent.width) / static_cast<float>(windowWidth);
+        float scaleY = static_cast<float>(swapchainExtent.height) / static_cast<float>(windowHeight);
+
         // ShaderToy mouse convention:
         // xy = current mouse position (or click position)
         // zw = click position (negative if mouse button is up)
+        // Scale mouse coordinates to match framebuffer coordinates
+        float scaledMouseX = static_cast<float>(mouseX) * scaleX;
+        float scaledMouseY = static_cast<float>(mouseY) * scaleY;
+        float scaledClickX = static_cast<float>(mouseClickX) * scaleX;
+        float scaledClickY = static_cast<float>(mouseClickY) * scaleY;
+
         if (mousePressed) {
-            ubo.iMouse[0] = static_cast<float>(mouseX);
-            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height - mouseY); // Flip Y coordinate
-            ubo.iMouse[2] = static_cast<float>(mouseClickX);
-            ubo.iMouse[3] = static_cast<float>(swapchainExtent.height - mouseClickY);
+            ubo.iMouse[0] = scaledMouseX;
+            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height) - scaledMouseY; // Flip Y coordinate
+            ubo.iMouse[2] = scaledClickX;
+            ubo.iMouse[3] = static_cast<float>(swapchainExtent.height) - scaledClickY;
         } else {
-            ubo.iMouse[0] = static_cast<float>(mouseX);
-            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height - mouseY);
-            ubo.iMouse[2] = -static_cast<float>(mouseClickX);
-            ubo.iMouse[3] = -static_cast<float>(swapchainExtent.height - mouseClickY);
+            ubo.iMouse[0] = scaledMouseX;
+            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height) - scaledMouseY;
+            ubo.iMouse[2] = -scaledClickX;
+            ubo.iMouse[3] = -(static_cast<float>(swapchainExtent.height) - scaledClickY);
         }
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
