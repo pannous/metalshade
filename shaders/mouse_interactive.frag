@@ -1,0 +1,111 @@
+#version 450
+
+layout(location = 0) in vec2 fragCoord;
+layout(location = 0) out vec4 fragColor;
+
+layout(binding = 0) uniform UniformBufferObject {
+    vec3 iResolution;
+    float iTime;
+    vec4 iMouse;
+} ubo;
+
+layout(binding = 1) uniform sampler2D iChannel0;
+
+/*
+    Interactive Mouse Shader
+    ------------------------
+
+    Features:
+    - Click and drag to create ripple effects
+    - Mouse position controls color hue
+    - Distance from mouse affects saturation
+    - Multiple overlapping ripples from different clicks
+    - Particle trails that follow mouse movement
+
+    Controls:
+    - Move mouse to change colors
+    - Click and hold to create ripples
+*/
+
+#define PI 3.14159265359
+
+// HSB to RGB conversion
+vec3 hsb2rgb(vec3 c) {
+    vec3 rgb = clamp(abs(mod(c.x*6.0+vec3(0.0,4.0,2.0), 6.0)-3.0)-1.0, 0.0, 1.0);
+    rgb = rgb*rgb*(3.0-2.0*rgb);
+    return c.z * mix(vec3(1.0), rgb, c.y);
+}
+
+// Create smooth ripple wave
+float ripple(vec2 uv, vec2 center, float time, float speed) {
+    float dist = length(uv - center);
+    float wave = sin(dist * 15.0 - time * speed) * 0.5 + 0.5;
+    float decay = exp(-dist * 2.0);
+    return wave * decay;
+}
+
+void main() {
+    vec2 uv = fragCoord / ubo.iResolution.xy;
+    vec2 mouse = ubo.iMouse.xy / ubo.iResolution.xy;
+    vec2 clickPos = abs(ubo.iMouse.zw) / ubo.iResolution.xy;
+    bool isPressed = ubo.iMouse.z > 0.0;
+
+    // Calculate distance from mouse
+    float distToMouse = length(uv - mouse);
+
+    // Base color influenced by mouse position
+    float hue = mouse.x;
+    float brightness = 0.3 + mouse.y * 0.5;
+
+    // Create ripples from click position when mouse is pressed
+    float rippleEffect = 0.0;
+    if (isPressed) {
+        rippleEffect = ripple(uv, clickPos, ubo.iTime, 5.0);
+        // Add additional ripples at different frequencies
+        rippleEffect += ripple(uv, clickPos, ubo.iTime * 1.3, 7.0) * 0.5;
+        rippleEffect += ripple(uv, clickPos, ubo.iTime * 0.7, 3.0) * 0.3;
+    }
+
+    // Create a glow effect around the mouse cursor
+    float cursorGlow = exp(-distToMouse * 8.0);
+
+    // Swirling effect based on angle to mouse
+    vec2 toMouse = mouse - uv;
+    float angle = atan(toMouse.y, toMouse.x);
+    float spiralHue = hue + angle / (2.0 * PI) + distToMouse * 2.0;
+
+    // Combine effects
+    float saturation = 0.6 + cursorGlow * 0.4 + rippleEffect * 0.3;
+    saturation = clamp(saturation, 0.0, 1.0);
+
+    brightness += rippleEffect * 0.4 + cursorGlow * 0.3;
+    brightness = clamp(brightness, 0.0, 1.0);
+
+    // Create color with HSB
+    vec3 color = hsb2rgb(vec3(spiralHue, saturation, brightness));
+
+    // Add mouse trail effect - brighter along the path to mouse
+    float trail = 0.0;
+    for (float i = 0.0; i < 5.0; i++) {
+        float t = i / 5.0;
+        vec2 trailPos = mix(clickPos, mouse, t);
+        float trailDist = length(uv - trailPos);
+        trail += exp(-trailDist * 30.0) * (1.0 - t * 0.5);
+    }
+    color += vec3(trail * 0.5);
+
+    // Add circular waves emanating from mouse when clicked
+    if (isPressed) {
+        float wave = sin(distToMouse * 30.0 - ubo.iTime * 8.0) * 0.5 + 0.5;
+        float waveMask = smoothstep(0.4, 0.6, wave) * exp(-distToMouse * 3.0);
+        color += vec3(waveMask * 0.4);
+    }
+
+    // Subtle animated background texture
+    vec2 texCoord = uv + vec2(sin(uv.y * 10.0 + ubo.iTime * 0.5) * 0.02,
+                               cos(uv.x * 10.0 + ubo.iTime * 0.5) * 0.02);
+    vec3 texColor = texture(iChannel0, texCoord).rgb;
+    color = mix(color, texColor * color, 0.2);
+
+    fragColor = vec4(color, 1.0);
+}

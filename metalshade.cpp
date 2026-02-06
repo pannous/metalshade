@@ -100,6 +100,13 @@ private:
     int windowedPosX = 0;
     int windowedPosY = 0;
 
+    // Mouse input state
+    double mouseX = 0.0;
+    double mouseY = 0.0;
+    double mouseClickX = 0.0;
+    double mouseClickY = 0.0;
+    bool mousePressed = false;
+
     // Shader browsing
     std::vector<std::string> shaderList;
     int currentShaderIndex = 0;
@@ -121,6 +128,25 @@ private:
                 viewer->switchShader(1);
             }
         }
+    }
+
+    static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
+        ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
+        if (button == GLFW_MOUSE_BUTTON_LEFT) {
+            if (action == GLFW_PRESS) {
+                viewer->mousePressed = true;
+                viewer->mouseClickX = viewer->mouseX;
+                viewer->mouseClickY = viewer->mouseY;
+            } else if (action == GLFW_RELEASE) {
+                viewer->mousePressed = false;
+            }
+        }
+    }
+
+    static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
+        ShaderToyViewer* viewer = static_cast<ShaderToyViewer*>(glfwGetWindowUserPointer(window));
+        viewer->mouseX = xpos;
+        viewer->mouseY = ypos;
     }
 
     void toggleFullscreen() {
@@ -613,6 +639,8 @@ private:
         // Set user pointer for callback access
         glfwSetWindowUserPointer(window, this);
         glfwSetKeyCallback(window, keyCallback);
+        glfwSetMouseButtonCallback(window, mouseButtonCallback);
+        glfwSetCursorPosCallback(window, cursorPosCallback);
 
         std::cout << "✓ GLFW window created" << std::endl;
         startTime = std::chrono::steady_clock::now();
@@ -1513,10 +1541,21 @@ private:
         ubo.iResolution[1] = static_cast<float>(swapchainExtent.height);
         ubo.iResolution[2] = 1.0f;
         ubo.iTime = time;
-        ubo.iMouse[0] = 0.0f;
-        ubo.iMouse[1] = 0.0f;
-        ubo.iMouse[2] = 0.0f;
-        ubo.iMouse[3] = 0.0f;
+
+        // ShaderToy mouse convention:
+        // xy = current mouse position (or click position)
+        // zw = click position (negative if mouse button is up)
+        if (mousePressed) {
+            ubo.iMouse[0] = static_cast<float>(mouseX);
+            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height - mouseY); // Flip Y coordinate
+            ubo.iMouse[2] = static_cast<float>(mouseClickX);
+            ubo.iMouse[3] = static_cast<float>(swapchainExtent.height - mouseClickY);
+        } else {
+            ubo.iMouse[0] = static_cast<float>(mouseX);
+            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height - mouseY);
+            ubo.iMouse[2] = -static_cast<float>(mouseClickX);
+            ubo.iMouse[3] = -static_cast<float>(swapchainExtent.height - mouseClickY);
+        }
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
