@@ -97,6 +97,13 @@ private:
     VkImageView textureImageView;
     VkSampler textureSampler;
 
+    // Feedback buffers for persistent paint effects (ping-pong)
+    VkImage feedbackImages[2];
+    VkDeviceMemory feedbackImageMemories[2];
+    VkImageView feedbackImageViews[2];
+    VkFramebuffer feedbackFramebuffers[2];
+    int currentFeedbackBuffer = 0;  // Ping-pong index
+
     VkDescriptorPool descriptorPool;
     std::vector<VkDescriptorSet> descriptorSets;
 
@@ -703,6 +710,7 @@ private:
         createTextureImage();
         createTextureImageView();
         createTextureSampler();
+        createFeedbackBuffers();
         createUniformBuffer();
         createDescriptorPool();
         createDescriptorSets();
@@ -948,7 +956,15 @@ private:
         samplerLayoutBinding.pImmutableSamplers = nullptr;
         samplerLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
 
-        std::vector<VkDescriptorSetLayoutBinding> bindings = {uboLayoutBinding, samplerLayoutBinding};
+        // Feedback texture binding (iChannel1) for paint/persistent effects
+        VkDescriptorSetLayoutBinding feedbackLayoutBinding{};
+        feedbackLayoutBinding.binding = 2;
+        feedbackLayoutBinding.descriptorCount = 1;
+        feedbackLayoutBinding.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        feedbackLayoutBinding.pImmutableSamplers = nullptr;
+        feedbackLayoutBinding.stageFlags = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+        std::vector<VkDescriptorSetLayoutBinding> bindings = {uboLayoutBinding, samplerLayoutBinding, feedbackLayoutBinding};
         VkDescriptorSetLayoutCreateInfo layoutInfo{};
         layoutInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
         layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
@@ -1437,6 +1453,41 @@ private:
         }
     }
 
+    void createFeedbackBuffers() {
+        // Create 2 feedback buffers for ping-pong rendering
+        for (int i = 0; i < 2; i++) {
+            // Create image for feedback buffer
+            createImage(swapchainExtent.width, swapchainExtent.height,
+                       VK_FORMAT_R8G8B8A8_UNORM,  // Use UNORM for render target
+                       VK_IMAGE_TILING_OPTIMAL,
+                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
+                       feedbackImages[i], feedbackImageMemories[i]);
+
+            // Create image view
+            VkImageViewCreateInfo viewInfo{};
+            viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+            viewInfo.image = feedbackImages[i];
+            viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+            viewInfo.format = VK_FORMAT_R8G8B8A8_UNORM;
+            viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+            viewInfo.subresourceRange.baseMipLevel = 0;
+            viewInfo.subresourceRange.levelCount = 1;
+            viewInfo.subresourceRange.baseArrayLayer = 0;
+            viewInfo.subresourceRange.layerCount = 1;
+
+            if (vkCreateImageView(device, &viewInfo, nullptr, &feedbackImageViews[i]) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create feedback image view!");
+            }
+
+            // Transition to shader read layout initially
+            transitionImageLayout(feedbackImages[i], VK_FORMAT_R8G8B8A8_UNORM,
+                                VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+        }
+
+        std::cout << "✓ Created ping-pong feedback buffers for paint effects" << std::endl;
+    }
+
     void createUniformBuffer() {
         VkDeviceSize bufferSize = sizeof(UniformBufferObject);
         createBuffer(bufferSize, VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
@@ -1450,7 +1501,8 @@ private:
         poolSizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
         poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
         poolSizes[1].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
+        // 2 samplers per frame: iChannel0 (static texture) + iChannel1 (feedback)
+        poolSizes[1].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT * 2);
 
         VkDescriptorPoolCreateInfo poolInfo{};
         poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1487,7 +1539,13 @@ private:
             imageInfo.imageView = textureImageView;
             imageInfo.sampler = textureSampler;
 
-            std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
+            // Feedback texture info (iChannel1) - TODO: Make this dynamic for ping-pong
+            VkDescriptorImageInfo feedbackInfo{};
+            feedbackInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+            feedbackInfo.imageView = feedbackImageViews[0];  // For now, always bind buffer 0
+            feedbackInfo.sampler = textureSampler;
+
+            std::array<VkWriteDescriptorSet, 3> descriptorWrites{};
 
             descriptorWrites[0].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
             descriptorWrites[0].dstSet = descriptorSets[i];
@@ -1504,6 +1562,14 @@ private:
             descriptorWrites[1].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
             descriptorWrites[1].descriptorCount = 1;
             descriptorWrites[1].pImageInfo = &imageInfo;
+
+            descriptorWrites[2].sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+            descriptorWrites[2].dstSet = descriptorSets[i];
+            descriptorWrites[2].dstBinding = 2;
+            descriptorWrites[2].dstArrayElement = 0;
+            descriptorWrites[2].descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+            descriptorWrites[2].descriptorCount = 1;
+            descriptorWrites[2].pImageInfo = &feedbackInfo;
 
             vkUpdateDescriptorSets(device, static_cast<uint32_t>(descriptorWrites.size()), descriptorWrites.data(), 0, nullptr);
         }
@@ -1737,6 +1803,13 @@ private:
         vkDestroyImageView(device, textureImageView, nullptr);
         vkDestroyImage(device, textureImage, nullptr);
         vkFreeMemory(device, textureImageMemory, nullptr);
+
+        // Cleanup feedback buffers
+        for (int i = 0; i < 2; i++) {
+            vkDestroyImageView(device, feedbackImageViews[i], nullptr);
+            vkDestroyImage(device, feedbackImages[i], nullptr);
+            vkFreeMemory(device, feedbackImageMemories[i], nullptr);
+        }
 
         vkDestroyDevice(device, nullptr);
         vkDestroySurfaceKHR(instance, surface, nullptr);
