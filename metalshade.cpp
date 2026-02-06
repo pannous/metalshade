@@ -25,6 +25,7 @@ struct UniformBufferObject {
     alignas(4) float iTime;
     alignas(16) float iMouse[4];
     alignas(8) float iScroll[2];  // Accumulated scroll offset (x, y)
+    alignas(16) float iButtons[5]; // Button states: [left, right, middle, button4, button5]
 };
 
 std::vector<char> readFile(const std::string& filename) {
@@ -108,6 +109,9 @@ private:
     double mouseClickY = 0.0;
     bool mouseLeftPressed = false;
     bool mouseRightPressed = false;
+    bool mouseMiddlePressed = false;
+    bool mouseButton4Pressed = false;
+    bool mouseButton5Pressed = false;
     float scrollX = 0.0f;
     float scrollY = 0.0f;
 
@@ -141,21 +145,34 @@ private:
 
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
+
+        const char* buttonName = "unknown";
+        bool pressed = (action == GLFW_PRESS);
+
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            if (action == GLFW_PRESS) {
-                viewer->mouseLeftPressed = true;
+            buttonName = "LEFT";
+            viewer->mouseLeftPressed = pressed;
+            if (pressed) {
                 viewer->mouseClickX = viewer->mouseX;
                 viewer->mouseClickY = viewer->mouseY;
-            } else if (action == GLFW_RELEASE) {
-                viewer->mouseLeftPressed = false;
             }
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-            if (action == GLFW_PRESS) {
-                viewer->mouseRightPressed = true;
-            } else if (action == GLFW_RELEASE) {
-                viewer->mouseRightPressed = false;
-            }
+            buttonName = "RIGHT";
+            viewer->mouseRightPressed = pressed;
+        } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
+            buttonName = "MIDDLE";
+            viewer->mouseMiddlePressed = pressed;
+        } else if (button == 3) {  // GLFW_MOUSE_BUTTON_4
+            buttonName = "BUTTON4";
+            viewer->mouseButton4Pressed = pressed;
+        } else if (button == 4) {  // GLFW_MOUSE_BUTTON_5
+            buttonName = "BUTTON5";
+            viewer->mouseButton5Pressed = pressed;
+        } else {
+            buttonName = ("BUTTON_" + std::to_string(button)).c_str();
         }
+
+        std::cout << "Mouse " << buttonName << " " << (pressed ? "PRESSED" : "RELEASED") << std::endl;
     }
 
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
@@ -169,6 +186,8 @@ private:
         // Accumulate scroll offset for shaders to use as they wish
         viewer->scrollX += static_cast<float>(xoffset);
         viewer->scrollY += static_cast<float>(yoffset);
+        std::cout << "Scroll: x=" << xoffset << " y=" << yoffset
+                  << " (total: " << viewer->scrollX << ", " << viewer->scrollY << ")" << std::endl;
     }
 
     void toggleFullscreen() {
@@ -1595,6 +1614,14 @@ private:
         // Pass scroll offset for shaders to use as they wish
         ubo.iScroll[0] = scrollX;
         ubo.iScroll[1] = scrollY;
+
+        // Pass button states (1.0 = pressed, 0.0 = not pressed)
+        // Also in iMouse.z for compatibility, but having all in one place is cleaner
+        ubo.iButtons[0] = mouseLeftPressed ? 1.0f : 0.0f;
+        ubo.iButtons[1] = mouseRightPressed ? 1.0f : 0.0f;
+        ubo.iButtons[2] = mouseMiddlePressed ? 1.0f : 0.0f;
+        ubo.iButtons[3] = mouseButton4Pressed ? 1.0f : 0.0f;
+        ubo.iButtons[4] = mouseButton5Pressed ? 1.0f : 0.0f;
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }

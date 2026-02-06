@@ -8,6 +8,7 @@ layout(binding = 0) uniform UniformBufferObject {
     float iTime;
     vec4 iMouse;
     vec2 iScroll;  // Accumulated scroll offset (x, y)
+    float iButtons[5]; // [left, right, middle, button4, button5] (1.0 = pressed)
 } ubo;
 
 layout(binding = 1) uniform sampler2D iChannel0;
@@ -25,10 +26,13 @@ layout(binding = 1) uniform sampler2D iChannel0;
 
     Controls:
     - Move mouse to change colors
-    - Left click and hold to create ripples
-    - Right click for additional effects (shader-specific)
-    - Scroll wheel to zoom in/out (centered on mouse)
-    - Press R to reset scroll/zoom
+    - Left click: Creates ripples + red pulsing tint
+    - Right click: Bright green corners
+    - Middle click: Blue vertical stripes
+    - Button 4 (back): Magenta horizontal wave
+    - Button 5 (forward): Cyan radial pulse from center
+    - Scroll wheel: Zoom in/out (centered on mouse)
+    - Press R: Reset scroll/zoom
 */
 
 #define PI 3.14159265359
@@ -117,6 +121,38 @@ void main() {
                                      cos(zoomedUv.x * 10.0 + ubo.iTime * 0.5) * 0.02);
     vec3 texColor = texture(iChannel0, texCoord).rgb;
     color = mix(color, texColor * color, 0.2);
+
+    // OBVIOUS BUTTON EFFECTS - each button gets a distinct color and position
+    // Left button (already creates ripples) - add pulsing red tint
+    if (ubo.iButtons[0] > 0.5) {
+        color += vec3(0.3, 0.0, 0.0) * (sin(ubo.iTime * 10.0) * 0.5 + 0.5);
+    }
+
+    // Right button - bright green corners
+    if (ubo.iButtons[1] > 0.5) {
+        float cornerDist = min(min(length(uv), length(uv - vec2(1.0, 0.0))),
+                               min(length(uv - vec2(0.0, 1.0)), length(uv - vec2(1.0, 1.0))));
+        color += vec3(0.0, 2.0, 0.0) * exp(-cornerDist * 10.0);
+    }
+
+    // Middle button - blue vertical stripes
+    if (ubo.iButtons[2] > 0.5) {
+        float stripes = sin(uv.x * 50.0 + ubo.iTime * 5.0) * 0.5 + 0.5;
+        color += vec3(0.0, 0.0, 1.0) * stripes * 0.5;
+    }
+
+    // Button 4 - magenta horizontal wave
+    if (ubo.iButtons[3] > 0.5) {
+        float wave = sin(uv.y * 30.0 - ubo.iTime * 8.0) * 0.5 + 0.5;
+        color += vec3(1.0, 0.0, 1.0) * wave * 0.7;
+    }
+
+    // Button 5 - cyan radial pulse from center
+    if (ubo.iButtons[4] > 0.5) {
+        float centerDist = length(uv - vec2(0.5));
+        float pulse = sin(centerDist * 20.0 - ubo.iTime * 10.0) * 0.5 + 0.5;
+        color += vec3(0.0, 1.0, 1.0) * pulse * 0.8;
+    }
 
     // Add a bright crosshair at exact mouse position for debugging/visibility
     vec2 mousePixel = ubo.iMouse.xy;
