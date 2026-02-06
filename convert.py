@@ -47,7 +47,30 @@ shader = re.sub(r'\bgl_FragColor\b', 'fragColor', shader)
 shader = re.sub(r'\btexture2D\b', 'texture', shader)
 
 # Convert ShaderToy mainImage to main
-shader = re.sub(r'\bvoid\s+mainImage\s*\(\s*out\s+vec4\s+fragColor\s*,\s*in\s+vec2\s+fragCoord\s*\)', 'void main()', shader)
+# Match various parameter names: fragColor/col, fragCoord/pc/uv
+main_pattern = r'void\s+mainImage\s*\(\s*out\s+vec4\s+(\w+)\s*,\s*in\s+vec2\s+(\w+)\s*\)'
+main_match = re.search(main_pattern, shader)
+
+if main_match:
+    out_var = main_match.group(1)  # fragColor, col, etc.
+    in_var = main_match.group(2)   # fragCoord, pc, uv, etc.
+
+    # Replace mainImage signature with main
+    shader = re.sub(main_pattern, 'void main()', shader)
+
+    # Add variable declarations at start of main()
+    shader = re.sub(
+        r'void main\(\)\s*\{',
+        f'void main() {{\n    vec4 {out_var};\n    vec2 {in_var} = fragCoord;',
+        shader
+    )
+
+    # Add output assignment before closing brace
+    shader = re.sub(
+        r'\}(\s*)$',
+        f'\n    fragColor = {out_var};\n}}\\1',
+        shader
+    )
 
 # Add Vulkan header
 vulkan_header = """#version 450
