@@ -1,10 +1,6 @@
 # Build artifacts
 *.spv
-metalshade
 test_vulkan
-
-# Downloaded shaders
-shaders/
 
 # macOS
 .DS_Store
@@ -21,3 +17,5 @@ shaders/
 # Added by cargo
 
 /target
+
+private
