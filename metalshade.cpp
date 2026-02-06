@@ -1559,14 +1559,14 @@ private:
 
         if (mousePressed) {
             ubo.iMouse[0] = scaledMouseX;
-            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height) - scaledMouseY; // Flip Y coordinate
+            ubo.iMouse[1] = scaledMouseY;
             ubo.iMouse[2] = scaledClickX;
-            ubo.iMouse[3] = static_cast<float>(swapchainExtent.height) - scaledClickY;
+            ubo.iMouse[3] = scaledClickY;
         } else {
             ubo.iMouse[0] = scaledMouseX;
-            ubo.iMouse[1] = static_cast<float>(swapchainExtent.height) - scaledMouseY;
+            ubo.iMouse[1] = scaledMouseY;
             ubo.iMouse[2] = -scaledClickX;
-            ubo.iMouse[3] = -(static_cast<float>(swapchainExtent.height) - scaledClickY);
+            ubo.iMouse[3] = -scaledClickY;
         }
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
