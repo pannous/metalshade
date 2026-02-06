@@ -103,6 +103,7 @@ private:
     std::vector<std::string> shaderList;
     int currentShaderIndex = 0;
     std::string currentShaderPath;
+    std::string currentTexturePath;
     bool hasGeometryShader = false;
 
     static void keyCallback(GLFWwindow* window, int key, int scancode, int action, int mods) {
@@ -300,6 +301,46 @@ private:
         return (lastSlash == std::string::npos) ? "." : path.substr(0, lastSlash);
     }
 
+    std::string parseTextureFromShader(const std::string& shaderPath) {
+        std::ifstream file(shaderPath);
+        if (!file.is_open()) {
+            return "";
+        }
+
+        std::string line;
+        std::string shaderDir = getShaderDirectory(shaderPath);
+
+        // Look for // @texture <path> directive
+        while (std::getline(file, line)) {
+            size_t pos = line.find("// @texture");
+            if (pos != std::string::npos) {
+                size_t start = line.find_first_not_of(" \t", pos + 11);
+                if (start != std::string::npos) {
+                    size_t end = line.find_last_not_of(" \t\r\n");
+                    std::string texPath = line.substr(start, end - start + 1);
+
+                    // If relative path, resolve relative to shader directory
+                    if (texPath[0] != '/') {
+                        return shaderDir + "/" + texPath;
+                    }
+                    return texPath;
+                }
+            }
+        }
+
+        // Fallback: look for galaxy.jpg or galaxy.png in shader directory
+        std::string defaultTex = shaderDir + "/galaxy.jpg";
+        if (fileExists(defaultTex)) {
+            return defaultTex;
+        }
+        defaultTex = shaderDir + "/galaxy.png";
+        if (fileExists(defaultTex)) {
+            return defaultTex;
+        }
+
+        return "";
+    }
+
     bool isVulkanReadyShader(const std::string& path) {
         // Check if file has an extension that indicates it's already in Vulkan format
         const std::vector<std::string> vulkanExts = {".glsl", ".fsh", ".gsh", ".vsh"};
@@ -345,6 +386,12 @@ private:
     bool compileAndLoadShader(const std::string& fragPath) {
         // Convert to absolute path (works when working directory changes)
         std::string absFragPath = getAbsolutePath(fragPath);
+
+        // Parse texture from shader
+        currentTexturePath = parseTextureFromShader(absFragPath);
+        if (!currentTexturePath.empty()) {
+            std::cout << "✓ Texture: " << currentTexturePath << std::endl;
+        }
 
         // Get shader base name and directory
         std::string baseName = getShaderBaseName(absFragPath);
@@ -1102,10 +1149,57 @@ private:
 
     void createTextureImage() {
         int texWidth, texHeight, texChannels;
-        stbi_uc* pixels = stbi_load("shaders/galaxy.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        stbi_uc* pixels = nullptr;
 
+        // Try to load texture from currentTexturePath
+        if (!currentTexturePath.empty()) {
+            pixels = stbi_load(currentTexturePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+        }
+
+        // If no texture or loading failed, create a default procedural texture
         if (!pixels) {
-            throw std::runtime_error("Failed to load texture image: shaders/galaxy.jpg");
+            std::cout << "✓ Using procedural gradient texture" << std::endl;
+            texWidth = 256;
+            texHeight = 256;
+            VkDeviceSize imageSize = texWidth * texHeight * 4;
+
+            std::vector<uint8_t> proceduralPixels(imageSize);
+            for (uint32_t y = 0; y < (uint32_t)texHeight; y++) {
+                for (uint32_t x = 0; x < (uint32_t)texWidth; x++) {
+                    uint32_t idx = (y * texWidth + x) * 4;
+                    float fx = x / (float)texWidth;
+                    float fy = y / (float)texHeight;
+                    proceduralPixels[idx + 0] = (uint8_t)(fx * 255);
+                    proceduralPixels[idx + 1] = (uint8_t)(fy * 255);
+                    proceduralPixels[idx + 2] = (uint8_t)((fx + fy) * 128);
+                    proceduralPixels[idx + 3] = 255;
+                }
+            }
+
+            VkBuffer stagingBuffer;
+            VkDeviceMemory stagingBufferMemory;
+            createBuffer(imageSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
+                         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+                         stagingBuffer, stagingBufferMemory);
+
+            void* data;
+            vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
+            memcpy(data, proceduralPixels.data(), static_cast<size_t>(imageSize));
+            vkUnmapMemory(device, stagingBufferMemory);
+
+            createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
+                        VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT, textureImage, textureImageMemory);
+
+            transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+                                  VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+            copyBufferToImage(stagingBuffer, textureImage, texWidth, texHeight);
+            transitionImageLayout(textureImage, VK_FORMAT_R8G8B8A8_SRGB,
+                                  VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+            vkDestroyBuffer(device, stagingBuffer, nullptr);
+            vkFreeMemory(device, stagingBufferMemory, nullptr);
+            return;
         }
 
         VkDeviceSize imageSize = texWidth * texHeight * 4;

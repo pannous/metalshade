@@ -1,4 +1,5 @@
 #version 450
+// @texture galaxy.jpg
 
 layout(binding = 0) uniform UniformBufferObject {
     vec3 iResolution;
