@@ -145,10 +145,10 @@ void main() {
     vec2 uv = (fragCoord - 0.5 * ubo.iResolution.xy) / ubo.iResolution.y;
     float t = ubo.iTime * 0.2;
 
-    // Apply spacetime warping
+    // Apply spacetime warping - keep the distortion!
     vec2 warpedUV = warpSpacetime(uv, t);
 
-    // Sample galaxy at warped coordinates - PURE VERSION (no overlays)
+    // Sample galaxy at warped coordinates
     vec3 col = galaxyPhoto(warpedUV);
 
     // Vignette
