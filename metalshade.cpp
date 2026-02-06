@@ -152,38 +152,29 @@ private:
     static void mouseButtonCallback(GLFWwindow* window, int button, int action, int mods) {
         MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
 
-        const char* buttonName = "unknown";
         bool pressed = (action == GLFW_PRESS);
 
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
-            buttonName = "LEFT";
             viewer->mouseLeftPressed = pressed;
             if (pressed) {
                 viewer->mouseClickX = viewer->mouseX;
                 viewer->mouseClickY = viewer->mouseY;
-                viewer->buttonPressDuration[0] = 0.0f;  // Reset duration on press
+                viewer->buttonPressDuration[0] = 0.0f;
             }
+            // Duration stays at final value on release, resets on next press
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
-            buttonName = "RIGHT";
             viewer->mouseRightPressed = pressed;
             if (pressed) viewer->buttonPressDuration[1] = 0.0f;
         } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
-            buttonName = "MIDDLE";
             viewer->mouseMiddlePressed = pressed;
             if (pressed) viewer->buttonPressDuration[2] = 0.0f;
         } else if (button == 3) {  // GLFW_MOUSE_BUTTON_4
-            buttonName = "BUTTON4";
             viewer->mouseButton4Pressed = pressed;
             if (pressed) viewer->buttonPressDuration[3] = 0.0f;
         } else if (button == 4) {  // GLFW_MOUSE_BUTTON_5
-            buttonName = "BUTTON5";
             viewer->mouseButton5Pressed = pressed;
             if (pressed) viewer->buttonPressDuration[4] = 0.0f;
-        } else {
-            buttonName = ("BUTTON_" + std::to_string(button)).c_str();
         }
-
-        std::cout << "Mouse " << buttonName << " " << (pressed ? "PRESSED" : "RELEASED") << std::endl;
     }
 
     static void cursorPosCallback(GLFWwindow* window, double xpos, double ypos) {
@@ -197,8 +188,6 @@ private:
         // Accumulate scroll offset for shaders to use as they wish
         viewer->scrollX += static_cast<float>(xoffset);
         viewer->scrollY += static_cast<float>(yoffset);
-        std::cout << "Scroll: x=" << xoffset << " y=" << yoffset
-                  << " (total: " << viewer->scrollX << ", " << viewer->scrollY << ")" << std::endl;
     }
 
     void toggleFullscreen() {
@@ -1629,39 +1618,19 @@ private:
         ubo.iScroll[0] = scrollX;
         ubo.iScroll[1] = scrollY;
 
-        // Update button press durations (accumulate time while pressed)
+        // Update button press durations (accumulate while pressed, keep value after release)
         if (mouseLeftPressed) buttonPressDuration[0] += deltaTime;
-        else buttonPressDuration[0] = 0.0f;
-
         if (mouseRightPressed) buttonPressDuration[1] += deltaTime;
-        else buttonPressDuration[1] = 0.0f;
-
         if (mouseMiddlePressed) buttonPressDuration[2] += deltaTime;
-        else buttonPressDuration[2] = 0.0f;
-
         if (mouseButton4Pressed) buttonPressDuration[3] += deltaTime;
-        else buttonPressDuration[3] = 0.0f;
-
         if (mouseButton5Pressed) buttonPressDuration[4] += deltaTime;
-        else buttonPressDuration[4] = 0.0f;
 
-        // Pass button press durations (0.0 = not pressed, >0.0 = duration in seconds)
+        // Pass button press durations - stays at final value after release until next press
         ubo.iButtonLeft = buttonPressDuration[0];
         ubo.iButtonRight = buttonPressDuration[1];
         ubo.iButtonMiddle = buttonPressDuration[2];
         ubo.iButton4 = buttonPressDuration[3];
         ubo.iButton5 = buttonPressDuration[4];
-
-        // Debug: print button states when any button is pressed
-        static bool wasAnyPressed = false;
-        bool isAnyPressed = mouseLeftPressed || mouseRightPressed || mouseMiddlePressed ||
-                           mouseButton4Pressed || mouseButton5Pressed;
-        if (isAnyPressed && !wasAnyPressed) {
-            std::cout << "Button durations: L=" << ubo.iButtonLeft << " R=" << ubo.iButtonRight
-                     << " M=" << ubo.iButtonMiddle << " 4=" << ubo.iButton4
-                     << " 5=" << ubo.iButton5 << std::endl;
-        }
-        wasAnyPressed = isAnyPressed;
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
