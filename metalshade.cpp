@@ -25,7 +25,12 @@ struct UniformBufferObject {
     alignas(4) float iTime;
     alignas(16) float iMouse[4];
     alignas(8) float iScroll[2];  // Accumulated scroll offset (x, y)
-    alignas(16) float iButtons[5]; // Button states: [left, right, middle, button4, button5]
+    // Button states as individual floats (std140 array alignment is complex)
+    alignas(4) float iButtonLeft;
+    alignas(4) float iButtonRight;
+    alignas(4) float iButtonMiddle;
+    alignas(4) float iButton4;
+    alignas(4) float iButton5;
 };
 
 std::vector<char> readFile(const std::string& filename) {
@@ -1641,20 +1646,20 @@ private:
         else buttonPressDuration[4] = 0.0f;
 
         // Pass button press durations (0.0 = not pressed, >0.0 = duration in seconds)
-        ubo.iButtons[0] = buttonPressDuration[0];
-        ubo.iButtons[1] = buttonPressDuration[1];
-        ubo.iButtons[2] = buttonPressDuration[2];
-        ubo.iButtons[3] = buttonPressDuration[3];
-        ubo.iButtons[4] = buttonPressDuration[4];
+        ubo.iButtonLeft = buttonPressDuration[0];
+        ubo.iButtonRight = buttonPressDuration[1];
+        ubo.iButtonMiddle = buttonPressDuration[2];
+        ubo.iButton4 = buttonPressDuration[3];
+        ubo.iButton5 = buttonPressDuration[4];
 
         // Debug: print button states when any button is pressed
         static bool wasAnyPressed = false;
         bool isAnyPressed = mouseLeftPressed || mouseRightPressed || mouseMiddlePressed ||
                            mouseButton4Pressed || mouseButton5Pressed;
         if (isAnyPressed && !wasAnyPressed) {
-            std::cout << "Button durations: L=" << ubo.iButtons[0] << " R=" << ubo.iButtons[1]
-                     << " M=" << ubo.iButtons[2] << " 4=" << ubo.iButtons[3]
-                     << " 5=" << ubo.iButtons[4] << std::endl;
+            std::cout << "Button durations: L=" << ubo.iButtonLeft << " R=" << ubo.iButtonRight
+                     << " M=" << ubo.iButtonMiddle << " 4=" << ubo.iButton4
+                     << " 5=" << ubo.iButton5 << std::endl;
         }
         wasAnyPressed = isAnyPressed;
 
