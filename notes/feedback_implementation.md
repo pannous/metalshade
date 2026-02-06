@@ -79,11 +79,37 @@ This requires fewer changes but has the same core requirements.
 5. Full paint program
 
 ## Status
-- [ ] Member variables added
-- [ ] Descriptor layout modified
-- [ ] Descriptor pool modified
-- [ ] Feedback buffers created
-- [ ] Render pass modified
-- [ ] Command buffers modified
-- [ ] Cleanup added
+- [x] Member variables added
+- [x] Descriptor layout modified
+- [x] Descriptor pool modified
+- [x] Feedback buffers created
+- [ ] **Render pass modified** ← BLOCKING
+- [ ] **Command buffers modified** ← BLOCKING
+- [x] Cleanup added
 - [ ] Tested
+
+## Current Issue
+
+The feedback buffers are created and bound to iChannel1, but **we're not rendering to them**.
+
+The shader currently renders directly to the swapchain (line 1609 in metalshade.cpp):
+```cpp
+renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];  // Goes to screen
+```
+
+To fix, we need to:
+1. Create feedback framebuffers (already have VkFramebuffer members)
+2. Render to `feedbackFramebuffers[currentFeedbackBuffer]` first
+3. Blit/copy to swapchain
+4. Swap: `currentFeedbackBuffer = 1 - currentFeedbackBuffer`
+
+## Why It Shows Green
+
+The organic_life shader initializes with activator/inhibitor values that start green.
+Without feedback, it can't read previous frames, so it just shows the initialization state.
+
+## Workaround
+
+Use time-based shaders that don't need feedback:
+- `flowing_colors.frag` - Beautiful flowing patterns with mouse interaction
+- `mouse_interactive.frag` - Existing interactive shader
