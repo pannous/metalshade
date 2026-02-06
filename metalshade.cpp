@@ -4,6 +4,7 @@
 
 #include <iostream>
 #include <fstream>
+#include <sstream>
 #include <vector>
 #include <chrono>
 #include <cstring>
@@ -307,11 +308,76 @@ private:
             return "";
         }
 
+        std::string shaderContent;
         std::string line;
         std::string shaderDir = getShaderDirectory(shaderPath);
 
-        // Look for // @texture <path> directive
+        // Read entire file
         while (std::getline(file, line)) {
+            shaderContent += line + "\n";
+        }
+        file.close();
+
+        // 1. Check for ISF (Interactive Shader Format) JSON header
+        if (shaderContent.substr(0, 3) == "/*{") {
+            size_t jsonEnd = shaderContent.find("}*/");
+            if (jsonEnd != std::string::npos) {
+                std::string jsonStr = shaderContent.substr(3, jsonEnd - 3);
+
+                // Simple JSON parsing for INPUTS with TYPE "image"
+                size_t inputsPos = jsonStr.find("\"INPUTS\"");
+                if (inputsPos != std::string::npos) {
+                    size_t arrayStart = jsonStr.find("[", inputsPos);
+                    size_t arrayEnd = jsonStr.find("]", arrayStart);
+
+                    if (arrayStart != std::string::npos && arrayEnd != std::string::npos) {
+                        std::string inputsArray = jsonStr.substr(arrayStart + 1, arrayEnd - arrayStart - 1);
+
+                        // Look for TYPE: "image" entries
+                        size_t typePos = inputsArray.find("\"TYPE\"");
+                        while (typePos != std::string::npos) {
+                            size_t valueStart = inputsArray.find("\"", typePos + 6);
+                            size_t valueEnd = inputsArray.find("\"", valueStart + 1);
+
+                            if (valueStart != std::string::npos && valueEnd != std::string::npos) {
+                                std::string typeValue = inputsArray.substr(valueStart + 1, valueEnd - valueStart - 1);
+
+                                if (typeValue == "image") {
+                                    // Found an image input, look for NAME
+                                    size_t objStart = inputsArray.rfind("{", typePos);
+                                    size_t namePos = inputsArray.find("\"NAME\"", objStart);
+
+                                    if (namePos != std::string::npos && namePos < typePos) {
+                                        size_t nameValueStart = inputsArray.find("\"", namePos + 6);
+                                        size_t nameValueEnd = inputsArray.find("\"", nameValueStart + 1);
+
+                                        if (nameValueStart != std::string::npos && nameValueEnd != std::string::npos) {
+                                            std::string imageName = inputsArray.substr(nameValueStart + 1, nameValueEnd - nameValueStart - 1);
+
+                                            // Try common image extensions
+                                            for (const auto& ext : {".jpg", ".png", ".jpeg"}) {
+                                                std::string texPath = shaderDir + "/" + imageName + ext;
+                                                if (fileExists(texPath)) {
+                                                    std::cout << "✓ ISF texture: " << imageName << ext << std::endl;
+                                                    return texPath;
+                                                }
+                                            }
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
+
+                            typePos = inputsArray.find("\"TYPE\"", typePos + 1);
+                        }
+                    }
+                }
+            }
+        }
+
+        // 2. Look for // @texture <path> directive
+        std::istringstream iss(shaderContent);
+        while (std::getline(iss, line)) {
             size_t pos = line.find("// @texture");
             if (pos != std::string::npos) {
                 size_t start = line.find_first_not_of(" \t", pos + 11);
@@ -328,7 +394,7 @@ private:
             }
         }
 
-        // Fallback: look for galaxy.jpg or galaxy.png in shader directory
+        // 3. Fallback: look for galaxy.jpg or galaxy.png in shader directory
         std::string defaultTex = shaderDir + "/galaxy.jpg";
         if (fileExists(defaultTex)) {
             return defaultTex;
@@ -411,16 +477,32 @@ private:
 
             // Check if file is already in Vulkan format (has #version 450)
             std::ifstream checkFile(absFragPath);
-            std::string firstLine;
+            std::string line;
             bool needsConversion = true;
-            if (checkFile.is_open() && std::getline(checkFile, firstLine)) {
-                if (firstLine.find("#version 450") != std::string::npos) {
+            bool inBlockComment = false;
+
+            // Read first 50 lines to find #version, skipping ISF/comment blocks
+            for (int i = 0; i < 50 && checkFile.is_open() && std::getline(checkFile, line); i++) {
+                // Skip ISF JSON header
+                if (line.find("/*{") != std::string::npos) {
+                    inBlockComment = true;
+                }
+                if (inBlockComment) {
+                    if (line.find("}*/") != std::string::npos) {
+                        inBlockComment = false;
+                    }
+                    continue;
+                }
+
+                // Check for #version 450
+                if (line.find("#version 450") != std::string::npos) {
                     // Already in Vulkan format, just copy it
                     needsConversion = false;
                     std::string copyCmd = "cp \"" + absFragPath + "\" \"" + tempFrag + "\"";
                     if (system(copyCmd.c_str()) != 0) {
                         return false;
                     }
+                    break;
                 }
             }
             checkFile.close();
