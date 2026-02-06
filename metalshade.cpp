@@ -220,15 +220,46 @@ private:
     }
 
     std::string resolveFragmentShader(const std::string& path) {
+        // Handle missing extension or trailing dot
+        std::string workingPath = path;
+
+        // Remove trailing dot if present
+        if (!workingPath.empty() && workingPath.back() == '.') {
+            workingPath.pop_back();
+        }
+
+        // Check if file exists as-is
+        if (fileExists(workingPath)) {
+            return workingPath;
+        }
+
+        // Check if path has NO extension (no dot in filename)
+        size_t lastSlash = workingPath.find_last_of("/");
+        size_t lastDot = workingPath.find_last_of(".");
+        bool hasExtension = (lastDot != std::string::npos &&
+                           (lastSlash == std::string::npos || lastDot > lastSlash));
+
+        if (!hasExtension) {
+            // No extension provided, try adding common fragment shader extensions
+            std::vector<std::string> fragExts = {".frag", ".fsh", ".glsl"};
+            for (const auto& ext : fragExts) {
+                std::string testPath = workingPath + ext;
+                if (fileExists(testPath)) {
+                    std::cout << "✓ Auto-detected extension: " << testPath << std::endl;
+                    return testPath;
+                }
+            }
+        }
+
         // If a vertex/geometry shader is provided, try to find corresponding fragment shader
         std::vector<std::string> vertGeomExts = {".vert", ".vsh", ".geom", ".gsh"};
 
         for (const auto& ext : vertGeomExts) {
-            if (path.size() >= ext.size() &&
-                path.substr(path.size() - ext.size()) == ext) {
+            if (workingPath.size() >= ext.size() &&
+                workingPath.substr(workingPath.size() - ext.size()) == ext) {
                 // This is a vertex/geometry shader, find the fragment shader
-                std::string baseName = getShaderBaseName(path);
-                std::string shaderDir = getShaderDirectory(path);
+                std::string baseName = getShaderBaseName(workingPath);
+                std::string shaderDir = getShaderDirectory(workingPath);
 
                 // Try common fragment shader extensions
                 std::vector<std::string> fragExts = {".frag", ".fsh"};
@@ -240,13 +271,13 @@ private:
                     }
                 }
 
-                std::cerr << "⚠ Could not find corresponding fragment shader for: " << path << std::endl;
+                std::cerr << "⚠ Could not find corresponding fragment shader for: " << workingPath << std::endl;
                 std::cerr << "  Tried: " << baseName << ".frag, " << baseName << ".fsh" << std::endl;
-                return path; // Fallback to original (will likely fail)
+                return workingPath; // Fallback to original (will likely fail)
             }
         }
 
-        return path; // Not a vertex/geometry shader, use as-is
+        return workingPath; // Return as-is (may fail if file doesn't exist)
     }
 
     void loadShaderList(const std::string& initialShader = "") {
