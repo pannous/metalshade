@@ -112,6 +112,7 @@ private:
     bool mouseMiddlePressed = false;
     bool mouseButton4Pressed = false;
     bool mouseButton5Pressed = false;
+    float buttonPressDuration[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     float scrollX = 0.0f;
     float scrollY = 0.0f;
 
@@ -155,19 +156,24 @@ private:
             if (pressed) {
                 viewer->mouseClickX = viewer->mouseX;
                 viewer->mouseClickY = viewer->mouseY;
+                viewer->buttonPressDuration[0] = 0.0f;  // Reset duration on press
             }
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
             buttonName = "RIGHT";
             viewer->mouseRightPressed = pressed;
+            if (pressed) viewer->buttonPressDuration[1] = 0.0f;
         } else if (button == GLFW_MOUSE_BUTTON_MIDDLE) {
             buttonName = "MIDDLE";
             viewer->mouseMiddlePressed = pressed;
+            if (pressed) viewer->buttonPressDuration[2] = 0.0f;
         } else if (button == 3) {  // GLFW_MOUSE_BUTTON_4
             buttonName = "BUTTON4";
             viewer->mouseButton4Pressed = pressed;
+            if (pressed) viewer->buttonPressDuration[3] = 0.0f;
         } else if (button == 4) {  // GLFW_MOUSE_BUTTON_5
             buttonName = "BUTTON5";
             viewer->mouseButton5Pressed = pressed;
+            if (pressed) viewer->buttonPressDuration[4] = 0.0f;
         } else {
             buttonName = ("BUTTON_" + std::to_string(button)).c_str();
         }
@@ -1577,6 +1583,9 @@ private:
     void updateUniformBuffer() {
         auto currentTime = std::chrono::steady_clock::now();
         float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
+        static float lastTime = 0.0f;
+        float deltaTime = time - lastTime;
+        lastTime = time;
 
         UniformBufferObject ubo{};
         ubo.iResolution[0] = static_cast<float>(swapchainExtent.width);
@@ -1615,13 +1624,39 @@ private:
         ubo.iScroll[0] = scrollX;
         ubo.iScroll[1] = scrollY;
 
-        // Pass button states (1.0 = pressed, 0.0 = not pressed)
-        // Also in iMouse.z for compatibility, but having all in one place is cleaner
-        ubo.iButtons[0] = mouseLeftPressed ? 1.0f : 0.0f;
-        ubo.iButtons[1] = mouseRightPressed ? 1.0f : 0.0f;
-        ubo.iButtons[2] = mouseMiddlePressed ? 1.0f : 0.0f;
-        ubo.iButtons[3] = mouseButton4Pressed ? 1.0f : 0.0f;
-        ubo.iButtons[4] = mouseButton5Pressed ? 1.0f : 0.0f;
+        // Update button press durations (accumulate time while pressed)
+        if (mouseLeftPressed) buttonPressDuration[0] += deltaTime;
+        else buttonPressDuration[0] = 0.0f;
+
+        if (mouseRightPressed) buttonPressDuration[1] += deltaTime;
+        else buttonPressDuration[1] = 0.0f;
+
+        if (mouseMiddlePressed) buttonPressDuration[2] += deltaTime;
+        else buttonPressDuration[2] = 0.0f;
+
+        if (mouseButton4Pressed) buttonPressDuration[3] += deltaTime;
+        else buttonPressDuration[3] = 0.0f;
+
+        if (mouseButton5Pressed) buttonPressDuration[4] += deltaTime;
+        else buttonPressDuration[4] = 0.0f;
+
+        // Pass button press durations (0.0 = not pressed, >0.0 = duration in seconds)
+        ubo.iButtons[0] = buttonPressDuration[0];
+        ubo.iButtons[1] = buttonPressDuration[1];
+        ubo.iButtons[2] = buttonPressDuration[2];
+        ubo.iButtons[3] = buttonPressDuration[3];
+        ubo.iButtons[4] = buttonPressDuration[4];
+
+        // Debug: print button states when any button is pressed
+        static bool wasAnyPressed = false;
+        bool isAnyPressed = mouseLeftPressed || mouseRightPressed || mouseMiddlePressed ||
+                           mouseButton4Pressed || mouseButton5Pressed;
+        if (isAnyPressed && !wasAnyPressed) {
+            std::cout << "Button durations: L=" << ubo.iButtons[0] << " R=" << ubo.iButtons[1]
+                     << " M=" << ubo.iButtons[2] << " 4=" << ubo.iButtons[3]
+                     << " 5=" << ubo.iButtons[4] << std::endl;
+        }
+        wasAnyPressed = isAnyPressed;
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
