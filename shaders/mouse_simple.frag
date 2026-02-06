@@ -7,7 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     vec3 iResolution;
     float iTime;
     vec4 iMouse;
-    float iZoom;
+    vec2 iScroll;  // Accumulated scroll offset (x, y)
 } ubo;
 
 /*
@@ -19,10 +19,11 @@ layout(binding = 0) uniform UniformBufferObject {
     - Click and hold: creates a bright circle at click position
     - Distance from mouse: affects brightness
 
-    This is a minimal example showing how to use ubo.iMouse:
+    This is a minimal example showing how to use mouse and scroll input:
     - iMouse.xy = current mouse position
     - iMouse.zw = click position (negative when not pressed)
-    - Scroll wheel to zoom in/out
+    - iScroll.xy = accumulated scroll offset
+    - Use scroll for zoom, intensity, or any shader-specific parameter
 */
 
 void main() {
@@ -33,8 +34,12 @@ void main() {
     vec2 clickPos = abs(ubo.iMouse.zw) / ubo.iResolution.xy;
     bool isPressed = ubo.iMouse.z > 0.0;
 
+    // Calculate zoom from scroll (scroll up = zoom in)
+    float zoom = exp(ubo.iScroll.y * 0.1);
+    zoom = clamp(zoom, 0.1, 10.0);
+
     // Apply zoom centered on mouse position
-    vec2 zoomedUv = mouse + (uv - mouse) / ubo.iZoom;
+    vec2 zoomedUv = mouse + (uv - mouse) / zoom;
 
     // Base color controlled by mouse position
     vec3 color = vec3(mouse.x, mouse.y, 0.5);

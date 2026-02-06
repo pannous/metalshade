@@ -24,7 +24,7 @@ struct UniformBufferObject {
     alignas(16) float iResolution[3];
     alignas(4) float iTime;
     alignas(16) float iMouse[4];
-    alignas(4) float iZoom;
+    alignas(8) float iScroll[2];  // Accumulated scroll offset (x, y)
 };
 
 std::vector<char> readFile(const std::string& filename) {
@@ -106,8 +106,10 @@ private:
     double mouseY = 0.0;
     double mouseClickX = 0.0;
     double mouseClickY = 0.0;
-    bool mousePressed = false;
-    float zoomLevel = 1.0f;
+    bool mouseLeftPressed = false;
+    bool mouseRightPressed = false;
+    float scrollX = 0.0f;
+    float scrollY = 0.0f;
 
     // Shader browsing
     std::vector<std::string> shaderList;
@@ -128,6 +130,11 @@ private:
                 viewer->switchShader(-1);
             } else if (key == GLFW_KEY_RIGHT) {
                 viewer->switchShader(1);
+            } else if (key == GLFW_KEY_R) {
+                // Reset scroll offset
+                viewer->scrollX = 0.0f;
+                viewer->scrollY = 0.0f;
+                std::cout << "✓ Scroll reset" << std::endl;
             }
         }
     }
@@ -136,11 +143,17 @@ private:
         MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
         if (button == GLFW_MOUSE_BUTTON_LEFT) {
             if (action == GLFW_PRESS) {
-                viewer->mousePressed = true;
+                viewer->mouseLeftPressed = true;
                 viewer->mouseClickX = viewer->mouseX;
                 viewer->mouseClickY = viewer->mouseY;
             } else if (action == GLFW_RELEASE) {
-                viewer->mousePressed = false;
+                viewer->mouseLeftPressed = false;
+            }
+        } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
+            if (action == GLFW_PRESS) {
+                viewer->mouseRightPressed = true;
+            } else if (action == GLFW_RELEASE) {
+                viewer->mouseRightPressed = false;
             }
         }
     }
@@ -153,10 +166,9 @@ private:
 
     static void scrollCallback(GLFWwindow* window, double xoffset, double yoffset) {
         MetalshadeViewer* viewer = static_cast<MetalshadeViewer*>(glfwGetWindowUserPointer(window));
-        // Zoom in/out based on scroll direction
-        viewer->zoomLevel *= (1.0f + static_cast<float>(yoffset) * 0.1f);
-        // Clamp zoom level to reasonable range
-        viewer->zoomLevel = std::max(0.1f, std::min(viewer->zoomLevel, 10.0f));
+        // Accumulate scroll offset for shaders to use as they wish
+        viewer->scrollX += static_cast<float>(xoffset);
+        viewer->scrollY += static_cast<float>(yoffset);
     }
 
     void toggleFullscreen() {
@@ -1568,7 +1580,7 @@ private:
         float scaledClickX = static_cast<float>(mouseClickX) * scaleX;
         float scaledClickY = static_cast<float>(mouseClickY) * scaleY;
 
-        if (mousePressed) {
+        if (mouseLeftPressed) {
             ubo.iMouse[0] = scaledMouseX;
             ubo.iMouse[1] = scaledMouseY;
             ubo.iMouse[2] = scaledClickX;
@@ -1580,7 +1592,9 @@ private:
             ubo.iMouse[3] = -scaledClickY;
         }
 
-        ubo.iZoom = zoomLevel;
+        // Pass scroll offset for shaders to use as they wish
+        ubo.iScroll[0] = scrollX;
+        ubo.iScroll[1] = scrollY;
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
@@ -1640,8 +1654,9 @@ private:
     void mainLoop() {
         std::cout << "✓ Running Metalshade shader via Vulkan → MoltenVK → Metal" << std::endl;
         std::cout << "Controls:" << std::endl;
-        std::cout << "  Mouse - Interactive effects" << std::endl;
-        std::cout << "  Scroll wheel - Zoom in/out" << std::endl;
+        std::cout << "  Left/Right mouse - Interactive effects" << std::endl;
+        std::cout << "  Scroll wheel - Shader-specific (typically zoom)" << std::endl;
+        std::cout << "  R - Reset scroll offset" << std::endl;
         std::cout << "  ← → - Switch shaders" << std::endl;
         std::cout << "  F or F11 - Toggle fullscreen" << std::endl;
         std::cout << "  ESC - Exit" << std::endl;

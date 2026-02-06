@@ -7,7 +7,7 @@ layout(binding = 0) uniform UniformBufferObject {
     vec3 iResolution;
     float iTime;
     vec4 iMouse;
-    float iZoom;
+    vec2 iScroll;  // Accumulated scroll offset (x, y)
 } ubo;
 
 layout(binding = 1) uniform sampler2D iChannel0;
@@ -25,8 +25,10 @@ layout(binding = 1) uniform sampler2D iChannel0;
 
     Controls:
     - Move mouse to change colors
-    - Click and hold to create ripples
+    - Left click and hold to create ripples
+    - Right click for additional effects (shader-specific)
     - Scroll wheel to zoom in/out (centered on mouse)
+    - Press R to reset scroll/zoom
 */
 
 #define PI 3.14159265359
@@ -52,8 +54,12 @@ void main() {
     vec2 clickPos = abs(ubo.iMouse.zw) / ubo.iResolution.xy;
     bool isPressed = ubo.iMouse.z > 0.0;
 
+    // Calculate zoom from scroll (scroll up = zoom in)
+    float zoom = exp(ubo.iScroll.y * 0.1);  // Exponential zoom feels natural
+    zoom = clamp(zoom, 0.1, 10.0);  // Limit zoom range
+
     // Apply zoom centered on mouse position
-    vec2 zoomedUv = mouse + (uv - mouse) / ubo.iZoom;
+    vec2 zoomedUv = mouse + (uv - mouse) / zoom;
 
     // Calculate distance from mouse (use zoomed coordinates for effects)
     float distToMouse = length(zoomedUv - mouse);
