@@ -1,3 +1,4 @@
+shaders/winamp_milkdrop.frag
 shaders/galaxy_photo_warp.frag
 shaders/galaxy_warp.frag
 shaders/rainbow_flow.frag
