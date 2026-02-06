@@ -13,6 +13,9 @@
 #include <dirent.h> // For directory scanning
 #include <algorithm> // For std::sort
 
+#define STB_IMAGE_IMPLEMENTATION
+#include "stb_image.h"
+
 const int WIDTH = 1280;
 const int HEIGHT = 720;
 
@@ -1098,22 +1101,14 @@ private:
     }
 
     void createTextureImage() {
-        const uint32_t texWidth = 256;
-        const uint32_t texHeight = 256;
-        VkDeviceSize imageSize = texWidth * texHeight * 4;
+        int texWidth, texHeight, texChannels;
+        stbi_uc* pixels = stbi_load("shaders/galaxy.jpg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
-        std::vector<uint8_t> pixels(imageSize);
-        for (uint32_t y = 0; y < texHeight; y++) {
-            for (uint32_t x = 0; x < texWidth; x++) {
-                uint32_t idx = (y * texWidth + x) * 4;
-                float fx = x / (float)texWidth;
-                float fy = y / (float)texHeight;
-                pixels[idx + 0] = (uint8_t)(fx * 255);
-                pixels[idx + 1] = (uint8_t)(fy * 255);
-                pixels[idx + 2] = (uint8_t)((fx + fy) * 128);
-                pixels[idx + 3] = 255;
-            }
+        if (!pixels) {
+            throw std::runtime_error("Failed to load texture image: shaders/galaxy.jpg");
         }
+
+        VkDeviceSize imageSize = texWidth * texHeight * 4;
 
         VkBuffer stagingBuffer;
         VkDeviceMemory stagingBufferMemory;
@@ -1123,7 +1118,7 @@ private:
 
         void* data;
         vkMapMemory(device, stagingBufferMemory, 0, imageSize, 0, &data);
-        memcpy(data, pixels.data(), static_cast<size_t>(imageSize));
+        memcpy(data, pixels, static_cast<size_t>(imageSize));
         vkUnmapMemory(device, stagingBufferMemory);
 
         createImage(texWidth, texHeight, VK_FORMAT_R8G8B8A8_SRGB, VK_IMAGE_TILING_OPTIMAL,
@@ -1138,6 +1133,8 @@ private:
 
         vkDestroyBuffer(device, stagingBuffer, nullptr);
         vkFreeMemory(device, stagingBufferMemory, nullptr);
+
+        stbi_image_free(pixels);
     }
 
     void createTextureImageView() {
