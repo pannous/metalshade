@@ -1,6 +1,7 @@
 shaders/galaxy_photo_warp.frag
 shaders/galaxy_photo_warp_pure.frag
 shaders/galaxy_warp.frag
+shaders/spacetime_twist.frag
 shaders/rainbow_flow.frag
 shaders/crystalline_vortex.frag
 shaders/clouds_bookofshaders.frag
