@@ -30,7 +30,7 @@ layout(binding = 2) uniform sampler2D iChannel1;  // Previous frame feedback
 
     Controls:
     - Left Click: Add "life" activator
-    - Right Click: Add "inhibitor"
+    - Right Click: Reset to blank canvas
     - Middle Click: Add turbulence
     - Button 4: Reset to random state
     - Move mouse to influence flow
@@ -119,9 +119,8 @@ void main() {
     }
 
     if (ubo.iButtonRight > 0.0) {
-        // Add inhibitor (green)
-        float influence = exp(-distToMouse * 20.0);
-        state.g += influence * 0.5;
+        // Reset to black (clear canvas)
+        state = vec3(0.0);
     }
 
     if (ubo.iButtonMiddle > 0.0) {

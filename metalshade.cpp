@@ -1309,6 +1309,24 @@ private:
             barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
             sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
             destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        } else if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            // For feedback buffers: transition to color attachment for rendering
+            barrier.srcAccessMask = 0;
+            barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+            destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        } else if (oldLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
+            // After rendering to feedback buffer, transition to shader readable
+            barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            sourceStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+            destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+        } else if (oldLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL && newLayout == VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL) {
+            // Before rendering to feedback buffer, transition from shader read
+            barrier.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+            barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+            sourceStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+            destinationStage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         } else {
             throw std::invalid_argument("Unsupported layout transition!");
         }
@@ -1466,7 +1484,7 @@ private:
             createImage(swapchainExtent.width, swapchainExtent.height,
                        VK_FORMAT_R8G8B8A8_UNORM,  // Use UNORM for render target
                        VK_IMAGE_TILING_OPTIMAL,
-                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT,
+                       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT,
                        VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
                        feedbackImages[i], feedbackImageMemories[i]);
 
@@ -1486,9 +1504,23 @@ private:
                 throw std::runtime_error("Failed to create feedback image view!");
             }
 
-            // Transition to shader read layout initially
+            // Transition to shader read layout initially (starts as "previous frame")
             transitionImageLayout(feedbackImages[i], VK_FORMAT_R8G8B8A8_UNORM,
                                 VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+
+            // Create framebuffer for rendering to this feedback buffer
+            VkFramebufferCreateInfo framebufferInfo{};
+            framebufferInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+            framebufferInfo.renderPass = renderPass;
+            framebufferInfo.attachmentCount = 1;
+            framebufferInfo.pAttachments = &feedbackImageViews[i];
+            framebufferInfo.width = swapchainExtent.width;
+            framebufferInfo.height = swapchainExtent.height;
+            framebufferInfo.layers = 1;
+
+            if (vkCreateFramebuffer(device, &framebufferInfo, nullptr, &feedbackFramebuffers[i]) != VK_SUCCESS) {
+                throw std::runtime_error("Failed to create feedback framebuffer!");
+            }
         }
 
         std::cout << "✓ Created ping-pong feedback buffers for paint effects" << std::endl;
@@ -1595,6 +1627,27 @@ private:
         }
     }
 
+    void updateFeedbackDescriptor() {
+        // Update descriptor to point to the "read" feedback buffer
+        int readBuffer = 1 - currentFeedbackBuffer;  // Read from the other buffer
+
+        VkDescriptorImageInfo feedbackInfo{};
+        feedbackInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        feedbackInfo.imageView = feedbackImageViews[readBuffer];
+        feedbackInfo.sampler = textureSampler;
+
+        VkWriteDescriptorSet descriptorWrite{};
+        descriptorWrite.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+        descriptorWrite.dstSet = descriptorSets[currentFrame];
+        descriptorWrite.dstBinding = 2;  // iChannel1
+        descriptorWrite.dstArrayElement = 0;
+        descriptorWrite.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+        descriptorWrite.descriptorCount = 1;
+        descriptorWrite.pImageInfo = &feedbackInfo;
+
+        vkUpdateDescriptorSets(device, 1, &descriptorWrite, 0, nullptr);
+    }
+
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
         VkCommandBufferBeginInfo beginInfo{};
         beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -1603,10 +1656,35 @@ private:
             throw std::runtime_error("Failed to begin recording command buffer!");
         }
 
+        int writeBuffer = currentFeedbackBuffer;
+        int readBuffer = 1 - currentFeedbackBuffer;
+
+        // === STEP 1: Transition feedback write buffer to COLOR_ATTACHMENT ===
+        VkImageMemoryBarrier barrier1{};
+        barrier1.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier1.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier1.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier1.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier1.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier1.image = feedbackImages[writeBuffer];
+        barrier1.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier1.subresourceRange.baseMipLevel = 0;
+        barrier1.subresourceRange.levelCount = 1;
+        barrier1.subresourceRange.baseArrayLayer = 0;
+        barrier1.subresourceRange.layerCount = 1;
+        barrier1.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier1.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &barrier1);
+
+        // === STEP 2: Render to feedback buffer ===
         VkRenderPassBeginInfo renderPassInfo{};
         renderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
         renderPassInfo.renderPass = renderPass;
-        renderPassInfo.framebuffer = swapchainFramebuffers[imageIndex];
+        renderPassInfo.framebuffer = feedbackFramebuffers[writeBuffer];
         renderPassInfo.renderArea.offset = {0, 0};
         renderPassInfo.renderArea.extent = swapchainExtent;
 
@@ -1619,6 +1697,123 @@ private:
         vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, pipelineLayout, 0, 1, &descriptorSets[currentFrame], 0, nullptr);
         vkCmdDraw(commandBuffer, 6, 1, 0, 0);
         vkCmdEndRenderPass(commandBuffer);
+
+        // === STEP 3: Transition feedback buffer back to SHADER_READ ===
+        VkImageMemoryBarrier barrier2{};
+        barrier2.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier2.oldLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+        barrier2.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier2.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier2.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier2.image = feedbackImages[writeBuffer];
+        barrier2.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier2.subresourceRange.baseMipLevel = 0;
+        barrier2.subresourceRange.levelCount = 1;
+        barrier2.subresourceRange.baseArrayLayer = 0;
+        barrier2.subresourceRange.layerCount = 1;
+        barrier2.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+        barrier2.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            0, 0, nullptr, 0, nullptr, 1, &barrier2);
+
+        // === STEP 4: Transition feedback buffer to TRANSFER_SRC for blit ===
+        VkImageMemoryBarrier barrier3{};
+        barrier3.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier3.oldLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier3.newLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier3.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier3.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier3.image = feedbackImages[writeBuffer];
+        barrier3.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier3.subresourceRange.baseMipLevel = 0;
+        barrier3.subresourceRange.levelCount = 1;
+        barrier3.subresourceRange.baseArrayLayer = 0;
+        barrier3.subresourceRange.layerCount = 1;
+        barrier3.srcAccessMask = VK_ACCESS_SHADER_READ_BIT;
+        barrier3.dstAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+
+        // Transition swapchain image to TRANSFER_DST
+        VkImageMemoryBarrier barrier4{};
+        barrier4.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier4.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+        barrier4.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier4.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier4.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier4.image = swapchainImages[imageIndex];
+        barrier4.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier4.subresourceRange.baseMipLevel = 0;
+        barrier4.subresourceRange.levelCount = 1;
+        barrier4.subresourceRange.baseArrayLayer = 0;
+        barrier4.subresourceRange.layerCount = 1;
+        barrier4.srcAccessMask = 0;
+        barrier4.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+        VkImageMemoryBarrier barriers[] = {barrier3, barrier4};
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            0, 0, nullptr, 0, nullptr, 2, barriers);
+
+        // === STEP 5: Blit feedback buffer to swapchain ===
+        VkImageBlit blit{};
+        blit.srcOffsets[0] = {0, 0, 0};
+        blit.srcOffsets[1] = {(int32_t)swapchainExtent.width, (int32_t)swapchainExtent.height, 1};
+        blit.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.srcSubresource.mipLevel = 0;
+        blit.srcSubresource.baseArrayLayer = 0;
+        blit.srcSubresource.layerCount = 1;
+        blit.dstOffsets[0] = {0, 0, 0};
+        blit.dstOffsets[1] = {(int32_t)swapchainExtent.width, (int32_t)swapchainExtent.height, 1};
+        blit.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        blit.dstSubresource.mipLevel = 0;
+        blit.dstSubresource.baseArrayLayer = 0;
+        blit.dstSubresource.layerCount = 1;
+
+        vkCmdBlitImage(commandBuffer,
+            feedbackImages[writeBuffer], VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+            swapchainImages[imageIndex], VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+            1, &blit, VK_FILTER_NEAREST);
+
+        // === STEP 6: Transition swapchain to PRESENT ===
+        VkImageMemoryBarrier barrier5{};
+        barrier5.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier5.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+        barrier5.newLayout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+        barrier5.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier5.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier5.image = swapchainImages[imageIndex];
+        barrier5.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier5.subresourceRange.baseMipLevel = 0;
+        barrier5.subresourceRange.levelCount = 1;
+        barrier5.subresourceRange.baseArrayLayer = 0;
+        barrier5.subresourceRange.layerCount = 1;
+        barrier5.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+        barrier5.dstAccessMask = 0;
+
+        // Transition feedback buffer back to SHADER_READ for next frame
+        VkImageMemoryBarrier barrier6{};
+        barrier6.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+        barrier6.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+        barrier6.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+        barrier6.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier6.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+        barrier6.image = feedbackImages[writeBuffer];
+        barrier6.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+        barrier6.subresourceRange.baseMipLevel = 0;
+        barrier6.subresourceRange.levelCount = 1;
+        barrier6.subresourceRange.baseArrayLayer = 0;
+        barrier6.subresourceRange.layerCount = 1;
+        barrier6.srcAccessMask = VK_ACCESS_TRANSFER_READ_BIT;
+        barrier6.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+        VkImageMemoryBarrier finalBarriers[] = {barrier5, barrier6};
+        vkCmdPipelineBarrier(commandBuffer,
+            VK_PIPELINE_STAGE_TRANSFER_BIT,
+            VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT,
+            0, 0, nullptr, 0, nullptr, 2, finalBarriers);
 
         if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
             throw std::runtime_error("Failed to record command buffer!");
@@ -1719,6 +1914,7 @@ private:
         }
 
         updateUniformBuffer();
+        updateFeedbackDescriptor();  // Update which feedback buffer to read from
 
         vkResetFences(device, 1, &inFlightFences[currentFrame]);
 
@@ -1757,6 +1953,7 @@ private:
         vkQueuePresentKHR(graphicsQueue, &presentInfo);
 
         currentFrame = (currentFrame + 1) % MAX_FRAMES_IN_FLIGHT;
+        currentFeedbackBuffer = 1 - currentFeedbackBuffer;  // Swap ping-pong buffers
     }
 
     void mainLoop() {
@@ -1812,6 +2009,7 @@ private:
 
         // Cleanup feedback buffers
         for (int i = 0; i < 2; i++) {
+            vkDestroyFramebuffer(device, feedbackFramebuffers[i], nullptr);
             vkDestroyImageView(device, feedbackImageViews[i], nullptr);
             vkDestroyImage(device, feedbackImages[i], nullptr);
             vkFreeMemory(device, feedbackImageMemories[i], nullptr);
