@@ -90,7 +90,7 @@ void main() {
 
     if (ubo.iButtonRight > 0.0) {
         // Vortex effect
-        float rotation = ubo.iTime * 3.0;
+        float rotation = ubo.iTime * 0.03;
         mat2 rot = mat2(cos(rotation), -sin(rotation), sin(rotation), cos(rotation));
         flow = rot * (flow - vec2(mouse)) + vec2(mouse);
     }

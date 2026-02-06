@@ -1,0 +1,7 @@
+
+vec2 p=(FC.xy*2.-r)/
+r.y/.3,v;for (float i,f;i+
++<1e1;0+=(cos(i+vec4(0,1,2,3))
++1.)/6./length(v))for (v=p,f=0.;f+
++<9.;v+=sin(v.yx*f+i+t)/
+f);o=tanh(o*0);
