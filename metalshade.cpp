@@ -152,6 +152,12 @@ private:
                 viewer->scrollX = 0.0f;
                 viewer->scrollY = 0.0f;
                 std::cout << "✓ Scroll reset" << std::endl;
+            } else if (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) {
+                // Zoom in with + or = key
+                viewer->scrollY += 1.0f;
+            } else if (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT) {
+                // Zoom out with - key
+                viewer->scrollY -= 1.0f;
             }
         }
     }
