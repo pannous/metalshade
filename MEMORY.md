@@ -1,0 +1,1 @@
+/Users/me/.claude/projects/-opt-3d-metalshade/memory/MEMORY.md

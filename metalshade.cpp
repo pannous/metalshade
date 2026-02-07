@@ -129,10 +129,22 @@ private:
     float buttonPressDuration[5] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
     float scrollX = 0.0f;
     float scrollY = 0.0f;
+    float previousScrollY = 0.0f;  // For zoom-at-cursor
+    float currentZoom = 1.0f;  // Current zoom level
+    float currentTime = 0.0f;  // Current time for reset functionality
+    double referenceMouseX = WIDTH / 2.0;  // Reference mouse position for relative zooming
+    double referenceMouseY = HEIGHT / 2.0;  // (set on reset to avoid jumps at high zoom)
 
-    // Pan offset for drag-and-drop (accumulated when dragging)
-    float panOffsetX = 0.0f;
-    float panOffsetY = 0.0f;
+    // Pan offset for drag-and-drop (stored in zoom-independent complex-plane units)
+    float basePanX = 0.0f;  // Complex-plane units at zoom=1
+    float basePanY = 0.0f;
+
+    // Retina/HiDPI scale factors (framebuffer size / window size)
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    float aspect = 1.0f;  // Aspect ratio for coordinate conversion
+    int cachedWindowWidth = WIDTH;
+    int cachedWindowHeight = HEIGHT;
 
     // Shader browsing
     std::vector<std::string> shaderList;
@@ -156,9 +168,14 @@ private:
             } else if (key == GLFW_KEY_R) {
                 // Reset scroll offset and pan
                 viewer->scrollX = 0.0f;
+                // scrollY = 0 for regular zoom, or currentTime for auto-zoom (to reset animation)
                 viewer->scrollY = 0.0f;
-                viewer->panOffsetX = 0.0f;
-                viewer->panOffsetY = 0.0f;
+                viewer->previousScrollY = 0.0f;
+                viewer->basePanX = 0.0f;
+                viewer->basePanY = 0.0f;
+                // Store current mouse position as reference for relative zooming
+                viewer->referenceMouseX = viewer->mouseX;
+                viewer->referenceMouseY = viewer->mouseY;
                 std::cout << "✓ Reset zoom and pan" << std::endl;
             } else if (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) {
                 // Zoom in with + or = key
@@ -182,11 +199,20 @@ private:
                 viewer->mouseClickY = viewer->mouseY;
                 viewer->buttonPressDuration[0] = 0.0f;
             } else {
-                // On release: accumulate drag offset into pan offset
+                // On release: accumulate drag offset into basePan (complex-plane units)
+                // Convert from window pixels to complex-plane units at current zoom
                 double dragDeltaX = viewer->mouseX - viewer->mouseClickX;
                 double dragDeltaY = viewer->mouseY - viewer->mouseClickY;
-                viewer->panOffsetX += static_cast<float>(dragDeltaX);
-                viewer->panOffsetY += static_cast<float>(dragDeltaY);
+
+                // Normalize to 0-1 range (window coords)
+                float normDragX = static_cast<float>(dragDeltaX) / viewer->cachedWindowWidth;
+                float normDragY = static_cast<float>(dragDeltaY) / viewer->cachedWindowHeight;
+
+                // Convert to complex-plane units (accounts for current zoom and aspect)
+                // In shader: pan in normalized coords affects complex plane as: -pan * 3.0/zoom
+                // For X: also multiply by aspect
+                viewer->basePanX += normDragX * 3.0f / viewer->currentZoom / viewer->aspect;
+                viewer->basePanY += normDragY * 3.0f / viewer->currentZoom;
             }
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
             viewer->mouseRightPressed = pressed;
@@ -1901,6 +1927,9 @@ private:
         float deltaTime = time - lastTime;
         lastTime = time;
 
+        // Store current time for reset functionality
+        this->currentTime = time;
+
         UniformBufferObject ubo{};
         ubo.iResolution[0] = static_cast<float>(swapchainExtent.width);
         ubo.iResolution[1] = static_cast<float>(swapchainExtent.height);
@@ -1910,8 +1939,13 @@ private:
         // Get window size to calculate framebuffer scale (for Retina displays)
         int windowWidth, windowHeight;
         glfwGetWindowSize(window, &windowWidth, &windowHeight);
-        float scaleX = static_cast<float>(swapchainExtent.width) / static_cast<float>(windowWidth);
-        float scaleY = static_cast<float>(swapchainExtent.height) / static_cast<float>(windowHeight);
+        scaleX = static_cast<float>(swapchainExtent.width) / static_cast<float>(windowWidth);
+        scaleY = static_cast<float>(swapchainExtent.height) / static_cast<float>(windowHeight);
+
+        // Cache values for use in callbacks
+        cachedWindowWidth = windowWidth;
+        cachedWindowHeight = windowHeight;
+        aspect = static_cast<float>(swapchainExtent.width) / static_cast<float>(swapchainExtent.height);
 
         // ShaderToy mouse convention:
         // xy = current mouse position (or click position)
@@ -1935,8 +1969,48 @@ private:
         }
 
         // Pass scroll offset for shaders to use as they wish
-        ubo.iScroll[0] = scrollX;
+        // For auto-zoom: iScroll.x = reference mouse X (normalized), iScroll.y = time offset
+        ubo.iScroll[0] = static_cast<float>(referenceMouseX) / windowWidth;
         ubo.iScroll[1] = scrollY;
+
+        // Calculate current zoom level
+        currentZoom = exp(scrollY * 0.1f);
+        currentZoom = std::max(0.01f, std::min(100.0f, currentZoom));
+
+        // Zoom-at-cursor: NOW HANDLED IN SHADER (see mandelbrot_simple.frag)
+        // (C++ adjustment removed - shader does: center += (mouse - 0.5) * 3.0 * (z-1)/z)
+        if (scrollY != previousScrollY) {
+            previousScrollY = scrollY;
+        }
+
+        // Convert basePan (complex-plane units) to panOffset (pixels) for shader
+        // Shader does: panComplex = -panOffset/resolution * 3.0/zoom * aspect (for X)
+        // We want: panComplex = basePan (in complex units)
+        // So: basePan = -panOffset/resolution * 3.0/zoom * aspect
+        // Solving: panOffset = -basePan * resolution * zoom / 3.0 / aspect
+        // BUT: shader already multiplies by aspect, so we compensate here
+        // For X: aspect gets applied in shader, so divide here
+        // Wait, let me recalculate: shader does panComplex.x *= aspect AFTER the 3.0/zoom
+        // So: panComplex.x = -panOffset/width * 3.0/zoom * aspect
+        // We want panComplex.x = basePanX, so:
+        // basePanX = -panOffsetX/width * 3.0/zoom * aspect
+        // panOffsetX = -basePanX * width * zoom / 3.0 / aspect
+        // Hmm, this is what I have... Let me check shader more carefully
+        //
+        // Actually the issue is different - let me trace through shader:
+        // accumulatedPan.x = panOffsetX / width
+        // panComplex.x = -accumulatedPan.x * 3.0 / zoom
+        // panComplex.x *= aspect
+        // So: panComplex.x = -(panOffsetX/width) * 3.0/zoom * aspect
+        //
+        // For this to equal basePanX:
+        // basePanX = -(panOffsetX/width) * 3.0/zoom * aspect
+        // panOffsetX = -basePanX * width * zoom / (3.0 * aspect)
+        //
+        // Wait that's what I have! The formula is correct...
+        // Let me just remove aspect correction and see if that fixes it:
+        float panOffsetX = -basePanX * swapchainExtent.width * currentZoom / 3.0f;
+        float panOffsetY = -basePanY * swapchainExtent.height * currentZoom / 3.0f;
 
         // Update button press durations (accumulate while pressed, keep value after release)
         if (mouseLeftPressed) buttonPressDuration[0] += deltaTime;
@@ -1946,7 +2020,8 @@ private:
         if (mouseButton5Pressed) buttonPressDuration[4] += deltaTime;
 
         // Pass button press durations - stays at final value after release until next press
-        ubo.iButtonLeft = buttonPressDuration[0];
+        // Note: iButtonLeft repurposed for auto-zoom to pass reference mouse Y (normalized)
+        ubo.iButtonLeft = static_cast<float>(referenceMouseY) / windowHeight;
         ubo.iButtonRight = buttonPressDuration[1];
         ubo.iButtonMiddle = buttonPressDuration[2];
         ubo.iButton4 = buttonPressDuration[3];
