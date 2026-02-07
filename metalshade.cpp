@@ -1985,10 +1985,18 @@ private:
         ubo.iScroll[0] = static_cast<float>(referenceMouseX) / windowWidth;
         ubo.iScroll[1] = scrollY;
 
-        // Calculate current zoom level (matches shader: exp((iTime - iScroll.y) * ZOOM_SPEED))
-        const float ZOOM_SPEED = 0.15f;
-        float effectiveTime = time - scrollY;
-        currentZoom = exp(effectiveTime * ZOOM_SPEED);
+        // Calculate current zoom level
+        // Different formulas for auto-zoom vs manual zoom shaders
+        if (currentShaderPath.find("autozoom") != std::string::npos) {
+            // Auto-zoom mode: zoom = exp((time - scroll_y) * ZOOM_SPEED)
+            const float ZOOM_SPEED = 0.15f;
+            float effectiveTime = time - scrollY;
+            currentZoom = exp(effectiveTime * ZOOM_SPEED);
+        } else {
+            // Manual zoom mode: zoom = sqrt(exp(scroll_y * 0.1))
+            // Matches mandelbrot_simple.frag and other manual shaders
+            currentZoom = sqrt(exp(scrollY * 0.1f));
+        }
         currentZoom = std::max(0.01f, std::min(1e10f, currentZoom));
 
         // Zoom-at-cursor: NOW HANDLED IN SHADER (see mandelbrot_simple.frag)
