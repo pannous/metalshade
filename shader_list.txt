@@ -1,3 +1,4 @@
+shaders/kaleidoscope.frag
 shaders/button_duration_demo.frag
 shaders/mouse_simple.frag
 shaders/mouse_interactive.frag
