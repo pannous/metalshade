@@ -154,10 +154,10 @@ private:
                 std::cout << "✓ Scroll reset" << std::endl;
             } else if (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) {
                 // Zoom in with + or = key
-                viewer->scrollY += 1.0f;
+                viewer->scrollY = std::min(100.0f, viewer->scrollY + 1.0f);
             } else if (key == GLFW_KEY_MINUS || key == GLFW_KEY_KP_SUBTRACT) {
                 // Zoom out with - key
-                viewer->scrollY -= 1.0f;
+                viewer->scrollY = std::max(-100.0f, viewer->scrollY - 1.0f);
             }
         }
     }
@@ -201,6 +201,9 @@ private:
         // Accumulate scroll offset for shaders to use as they wish
         viewer->scrollX += static_cast<float>(xoffset);
         viewer->scrollY += static_cast<float>(yoffset);
+        // Clamp to prevent extreme values that cause numerical issues
+        viewer->scrollX = std::max(-100.0f, std::min(100.0f, viewer->scrollX));
+        viewer->scrollY = std::max(-100.0f, std::min(100.0f, viewer->scrollY));
     }
 
     void toggleFullscreen() {
