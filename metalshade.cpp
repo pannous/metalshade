@@ -31,6 +31,8 @@ struct UniformBufferObject {
     alignas(4) float iButtonMiddle;
     alignas(4) float iButton4;
     alignas(4) float iButton5;
+    // Pan offset for drag-and-drop (accumulated pixel offset)
+    alignas(8) float iPan[2];
 };
 
 std::vector<char> readFile(const std::string& filename) {
@@ -128,6 +130,10 @@ private:
     float scrollX = 0.0f;
     float scrollY = 0.0f;
 
+    // Pan offset for drag-and-drop (accumulated when dragging)
+    float panOffsetX = 0.0f;
+    float panOffsetY = 0.0f;
+
     // Shader browsing
     std::vector<std::string> shaderList;
     int currentShaderIndex = 0;
@@ -148,10 +154,12 @@ private:
             } else if (key == GLFW_KEY_RIGHT) {
                 viewer->switchShader(1);
             } else if (key == GLFW_KEY_R) {
-                // Reset scroll offset
+                // Reset scroll offset and pan
                 viewer->scrollX = 0.0f;
                 viewer->scrollY = 0.0f;
-                std::cout << "✓ Scroll reset" << std::endl;
+                viewer->panOffsetX = 0.0f;
+                viewer->panOffsetY = 0.0f;
+                std::cout << "✓ Reset zoom and pan" << std::endl;
             } else if (key == GLFW_KEY_EQUAL || key == GLFW_KEY_KP_ADD) {
                 // Zoom in with + or = key
                 viewer->scrollY = std::min(100.0f, viewer->scrollY + 1.0f);
@@ -173,8 +181,13 @@ private:
                 viewer->mouseClickX = viewer->mouseX;
                 viewer->mouseClickY = viewer->mouseY;
                 viewer->buttonPressDuration[0] = 0.0f;
+            } else {
+                // On release: accumulate drag offset into pan offset
+                double dragDeltaX = viewer->mouseX - viewer->mouseClickX;
+                double dragDeltaY = viewer->mouseY - viewer->mouseClickY;
+                viewer->panOffsetX += static_cast<float>(dragDeltaX);
+                viewer->panOffsetY += static_cast<float>(dragDeltaY);
             }
-            // Duration stays at final value on release, resets on next press
         } else if (button == GLFW_MOUSE_BUTTON_RIGHT) {
             viewer->mouseRightPressed = pressed;
             if (pressed) viewer->buttonPressDuration[1] = 0.0f;
@@ -1938,6 +1951,10 @@ private:
         ubo.iButtonMiddle = buttonPressDuration[2];
         ubo.iButton4 = buttonPressDuration[3];
         ubo.iButton5 = buttonPressDuration[4];
+
+        // Pass pan offset (accumulated drag distance in pixels)
+        ubo.iPan[0] = panOffsetX;
+        ubo.iPan[1] = panOffsetY;
 
         memcpy(uniformBufferMapped, &ubo, sizeof(ubo));
     }
