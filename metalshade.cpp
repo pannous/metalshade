@@ -134,6 +134,8 @@ private:
     float currentTime = 0.0f;  // Current time for reset functionality
     double referenceMouseX = WIDTH / 2.0;  // Reference mouse position for relative zooming
     double referenceMouseY = HEIGHT / 2.0;  // (set on reset to avoid jumps at high zoom)
+    double mouseSmoothedX = WIDTH / 2.0;  // Smoothed mouse position for zoom focal point
+    double mouseSmoothedY = HEIGHT / 2.0;  // (reduces jitter at high zoom levels)
 
     // Pan offset for drag-and-drop (stored in zoom-independent complex-plane units)
     float basePanX = 0.0f;  // Complex-plane units at zoom=1
@@ -1947,12 +1949,22 @@ private:
         cachedWindowHeight = windowHeight;
         aspect = static_cast<float>(swapchainExtent.width) / static_cast<float>(swapchainExtent.height);
 
+        // Mouse smoothing: reduce jitter at high zoom levels
+        // Use zoom-based dampening: lerp_factor = 1 / zoom^power
+        float lerpFactor = 1.0f / powf(currentZoom, 1.2f);
+        lerpFactor = std::max(0.0001f, std::min(1.0f, lerpFactor));
+        float smoothSpeed = lerpFactor * deltaTime * 60.0f * 0.5f;  // 2x slower, frame-rate independent
+        smoothSpeed = std::min(smoothSpeed, 1.0f);
+
+        mouseSmoothedX += (mouseX - mouseSmoothedX) * smoothSpeed;
+        mouseSmoothedY += (mouseY - mouseSmoothedY) * smoothSpeed;
+
         // ShaderToy mouse convention:
         // xy = current mouse position (or click position)
         // zw = click position (negative if mouse button is up)
-        // Scale mouse coordinates to match framebuffer coordinates
-        float scaledMouseX = static_cast<float>(mouseX) * scaleX;
-        float scaledMouseY = static_cast<float>(mouseY) * scaleY;
+        // Scale mouse coordinates to match framebuffer coordinates (use smoothed position)
+        float scaledMouseX = static_cast<float>(mouseSmoothedX) * scaleX;
+        float scaledMouseY = static_cast<float>(mouseSmoothedY) * scaleY;
         float scaledClickX = static_cast<float>(mouseClickX) * scaleX;
         float scaledClickY = static_cast<float>(mouseClickY) * scaleY;
 
@@ -1973,9 +1985,11 @@ private:
         ubo.iScroll[0] = static_cast<float>(referenceMouseX) / windowWidth;
         ubo.iScroll[1] = scrollY;
 
-        // Calculate current zoom level
-        currentZoom = exp(scrollY * 0.1f);
-        currentZoom = std::max(0.01f, std::min(100.0f, currentZoom));
+        // Calculate current zoom level (matches shader: exp((iTime - iScroll.y) * ZOOM_SPEED))
+        const float ZOOM_SPEED = 0.15f;
+        float effectiveTime = time - scrollY;
+        currentZoom = exp(effectiveTime * ZOOM_SPEED);
+        currentZoom = std::max(0.01f, std::min(1e10f, currentZoom));
 
         // Zoom-at-cursor: NOW HANDLED IN SHADER (see mandelbrot_simple.frag)
         // (C++ adjustment removed - shader does: center += (mouse - 0.5) * 3.0 * (z-1)/z)
